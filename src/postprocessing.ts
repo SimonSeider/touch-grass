@@ -119,7 +119,7 @@ export async function createPostprocessing(
         tDiffuse: { value: null },
         uDirection: { value: direction },
         uRadius: { value: 0 },
-        uMilk: { value: 0 },
+        uDim: { value: 0 },
         uTime: { value: 0 },
       },
       vertexShader: postGradeVert,
@@ -275,8 +275,8 @@ export async function createPostprocessing(
       const radius = MAX_BLUR_TEXELS * Math.pow(pauseBlur, 0.6);
       blurH.uniforms.uRadius.value = radius;
       blurV.uniforms.uRadius.value = radius;
-      blurH.uniforms.uMilk.value = 0;
-      blurV.uniforms.uMilk.value = pauseBlur;
+      blurH.uniforms.uDim.value = 0;
+      blurV.uniforms.uDim.value = pauseBlur;
     },
     dispose() {
       composer.dispose();

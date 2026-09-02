@@ -6,7 +6,6 @@ import { createPlayer } from './player';
 import { createParticles } from './particles';
 import { createAudio } from './audio';
 import { createPostprocessing, type PostSetup } from './postprocessing';
-import { initUiGlass } from './uiGlass';
 import { sunTint, sunEnergy } from './skymath';
 import { createSkyProbe, iblUniforms } from './skyprobe';
 import { RENDER_PARAMS } from './rendermode';
@@ -96,8 +95,6 @@ window.addEventListener('pointerdown', startAudioOnce);
 window.addEventListener('keydown', startAudioOnce);
 
 const menuEl = document.getElementById('menu') as HTMLDivElement;
-const glassCanvas = document.getElementById('glassbg') as HTMLCanvasElement;
-const glassBg = initUiGlass(glassCanvas);
 const musicSlider = document.getElementById('musicVol') as HTMLInputElement;
 const sfxSlider = document.getElementById('sfxVol') as HTMLInputElement;
 const musicPct = document.getElementById('musicPct') as HTMLElement;
@@ -120,9 +117,7 @@ function setMenu(open: boolean) {
   menuOpen = open;
   player.setPaused(open);
   menuEl.classList.toggle('open', open);
-  glassBg.setVisible(open);
   if (open) {
-    glassBg.setSize();
     if (document.pointerLockElement) document.exitPointerLock();
   } else {
     player.lock();
@@ -130,7 +125,10 @@ function setMenu(open: boolean) {
 }
 
 function updateSliderFill(el: HTMLInputElement) {
-  el.style.setProperty('--fill', el.value + '%');
+  const min = Number(el.min || 0);
+  const max = Number(el.max || 100);
+  const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0;
+  el.style.setProperty('--fill', pct.toFixed(2) + '%');
 }
 
 // I'm sorry Simon
@@ -147,32 +145,21 @@ function updateSliderFill(el: HTMLInputElement) {
 }*/
 
 interface SliderOptions {
-  // Map raw slider value to your custom math
   transform?: (raw: number) => number;
-  // Custom display string for the label
   format?: (val: number, raw: number) => string;
-  // Toggle track fill line
-  showFill?: boolean;
 }
 
-// TODO: Fix the damn UI for the camera settings
 function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void, options: SliderOptions = {}){
   const {
     transform = (raw) => raw,
     format = (v) => `${v}`,
-    showFill = true,
   } = options;
 
   const update = () => {
     const raw = Number(el.value);
     const val = transform(raw);
     label.textContent = format(val, raw);
-
-    if(showFill)
-      updateSliderFill(el);
-    else
-      el.style.setProperty('--fill-pct', '0%');
-
+    updateSliderFill(el);
     apply(val);
   };
 
@@ -210,7 +197,6 @@ bindSlider(shutterSpeedSlider, shutterSpeedPct,
   {
     transform: (raw) => 1 / raw,
     format: (_, raw) => (raw >= 1 ? `1/${raw}s` : `${(1 / raw).toFixed(1)}s`),
-    showFill: false,
   });
 
 bindSlider(apertureSlider, aperturePct,
@@ -221,7 +207,6 @@ bindSlider(apertureSlider, aperturePct,
   {
     transform: (raw) => raw,
     format: (val) => `f/${val.toFixed(1)}`,
-    showFill: false,
   });
 
 bindSlider(ISOSlider, ISOPct,
@@ -232,11 +217,11 @@ bindSlider(ISOSlider, ISOPct,
   {
     transform: (raw) => raw,
     format: (val) => `${val}`,
-    showFill: false,
   });
 
 bindToggle(autoExposureToggle,
   (c) => {
+    menuEl.classList.toggle('auto-exposure', c);
     if(post !== null)
         post.setAutoExposure(c);
   })
@@ -253,7 +238,6 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   if (post) post.setSize(window.innerWidth, window.innerHeight);
-  glassBg.setSize();
 });
 
 const clock = new THREE.Clock();
@@ -283,7 +267,6 @@ function animate() {
   grassLayer.update(t, camera.position);
   terrainLayer.update(camera.position);
   particles.update(t, camera.position, sunDir, sunColor);
-  glassBg.render(t);
 
   const blurTarget = menuOpen ? 1 : 0;
   if (menuBlur !== blurTarget) {

@@ -17,44 +17,11 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #a8d8c8;
+      background: #0b100e;
     }
 
     canvas {
       display: block;
-    }
-
-    #crosshair {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      width: 6px;
-      height: 6px;
-      transform: translate(-50%, -50%);
-      background: rgba(255, 255, 255, 0.5);
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    #ui {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: rgba(255, 255, 255, 0.9);
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 13px;
-      letter-spacing: 0.5px;
-      text-align: center;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-      pointer-events: none;
-      z-index: 10;
-      background: rgba(18, 34, 30, 0.30);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      padding: 8px 18px;
-      border-radius: 30px;
-      user-select: none;
     }
 
     #menu {
@@ -65,11 +32,11 @@
       align-items: center;
       justify-content: center;
       font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: radial-gradient(120% 90% at 50% 45%, rgba(14, 22, 20, 0.04), rgba(14, 22, 20, 0.22));
+      background: radial-gradient(120% 90% at 50% 45%, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.34));
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
-      transition: opacity 220ms ease, visibility 220ms;
+      transition: opacity 240ms ease, visibility 240ms;
     }
 
     #menu.open {
@@ -80,94 +47,123 @@
 
     #menu .panel {
       position: relative;
-      width: min(380px, 88vw);
-      padding: 30px 32px 26px;
-      border-radius: 28px;
-      overflow: hidden;
-      color: #16211d;
+      width: min(400px, 90vw);
+      max-height: 86vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 30px 30px 24px;
+      border-radius: 26px;
+      color: rgba(255, 255, 255, 0.92);
       user-select: none;
-      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(12, 18, 16, 0.34);
+      -webkit-backdrop-filter: blur(34px) saturate(115%);
+      backdrop-filter: blur(34px) saturate(115%);
+      border: 1px solid rgba(255, 255, 255, 0.09);
       box-shadow:
-        0 30px 70px rgba(10, 22, 18, 0.34),
-        0 2px 10px rgba(10, 22, 18, 0.16),
-        inset 0 1px 0 rgba(255, 255, 255, 0.85),
-        inset 0 -1px 0 rgba(255, 255, 255, 0.28);
-      background: rgba(246, 250, 247, 0.42);
-      transform: translateY(10px) scale(0.96);
-      transition: transform 300ms cubic-bezier(0.18, 0.9, 0.26, 1);
+        0 28px 70px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      transform: translateY(12px) scale(0.97);
+      transition: transform 320ms cubic-bezier(0.18, 0.9, 0.26, 1);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
     }
 
     #menu.open .panel {
       transform: none;
     }
 
-    #menu #glassbg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-      pointer-events: none;
-      z-index: 0;
+    #menu .panel::-webkit-scrollbar {
+      width: 6px;
     }
 
-    #menu .panel-inner {
-      position: relative;
-      z-index: 1;
+    #menu .panel::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
     }
 
     #menu .panel-label {
       font-size: 11px;
       font-weight: 600;
-      letter-spacing: 2.2px;
+      letter-spacing: 2.6px;
       text-transform: uppercase;
-      color: rgba(22, 33, 29, 0.48);
-      margin-bottom: 20px;
+      color: rgba(255, 255, 255, 0.42);
       text-align: center;
+      margin-bottom: 26px;
     }
 
-    #menu .panel-label::after {
-      content: '';
-      display: block;
-      height: 1px;
-      margin: 14px -6px 0;
-      background: linear-gradient(to right,
-          rgba(22, 33, 29, 0), rgba(22, 33, 29, 0.16), rgba(22, 33, 29, 0));
+    #menu .group {
+      margin-bottom: 26px;
+    }
+
+    #menu .group:last-of-type {
+      margin-bottom: 20px;
+    }
+
+    #menu .group-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.30);
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     }
 
     #menu .row {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-bottom: 22px;
+      margin-bottom: 18px;
     }
 
-    #menu .row .name {
-      font-size: 13.5px;
+    #menu .row:last-child {
+      margin-bottom: 0;
+    }
+
+    #menu .row-toggle {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #menu .name {
+      font-size: 13px;
       font-weight: 500;
       letter-spacing: 0.2px;
-      color: rgba(22, 33, 29, 0.88);
+      color: rgba(255, 255, 255, 0.82);
       display: flex;
       justify-content: space-between;
       align-items: baseline;
+      gap: 12px;
     }
 
-    #menu .row .name small {
+    #menu .name small {
+      font-size: 12px;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
-      color: rgba(22, 33, 29, 0.45);
+      color: rgba(255, 255, 255, 0.40);
+    }
+
+    #menu .manual {
+      transition: opacity 220ms ease;
+    }
+
+    #menu.auto-exposure .manual {
+      opacity: 0.32;
+      pointer-events: none;
     }
 
     #menu input[type="range"] {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
-      height: 6px;
+      height: 4px;
       border-radius: 4px;
       background:
         linear-gradient(to right,
-          #5f9c7d var(--fill, 50%), rgba(22, 33, 29, 0.14) var(--fill, 50%));
-      box-shadow: inset 0 1px 2px rgba(10, 22, 18, 0.18), 0 1px 0 rgba(255, 255, 255, 0.5);
+          rgba(255, 255, 255, 0.72) var(--fill, 50%),
+          rgba(255, 255, 255, 0.12) var(--fill, 50%));
       outline: none;
       cursor: pointer;
     }
@@ -175,100 +171,169 @@
     #menu input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 18px;
-      height: 18px;
+      width: 15px;
+      height: 15px;
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, #ffffff, #eef3ef 70%);
-      border: 1px solid rgba(10, 22, 18, 0.10);
-      box-shadow: 0 2px 6px rgba(10, 22, 18, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
       transition: transform 120ms ease;
     }
 
+    #menu input[type="range"]:hover::-webkit-slider-thumb {
+      transform: scale(1.08);
+    }
+
     #menu input[type="range"]:active::-webkit-slider-thumb {
-      transform: scale(1.12);
+      transform: scale(1.18);
     }
 
     #menu input[type="range"]::-moz-range-thumb {
-      width: 18px;
-      height: 18px;
+      width: 15px;
+      height: 15px;
+      border: none;
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, #ffffff, #eef3ef 70%);
-      border: 1px solid rgba(10, 22, 18, 0.10);
-      box-shadow: 0 2px 6px rgba(10, 22, 18, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    }
+
+    #menu .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+      flex: none;
+    }
+
+    #menu .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    #menu .track {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.12);
+      transition: background 200ms ease;
+    }
+
+    #menu .track::before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      transition: transform 220ms cubic-bezier(0.18, 0.9, 0.26, 1);
+    }
+
+    #menu .switch input:checked+.track {
+      background: rgba(255, 255, 255, 0.42);
+    }
+
+    #menu .switch input:checked+.track::before {
+      transform: translateX(18px);
+    }
+
+    #menu .credit {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    #menu .credit:last-child {
+      margin-bottom: 0;
+    }
+
+    #menu .credit a {
+      color: rgba(255, 255, 255, 0.82);
+      text-decoration: none;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+      transition: color 160ms ease, border-color 160ms ease;
+    }
+
+    #menu .credit a:hover {
+      color: #fff;
+      border-bottom-color: rgba(255, 255, 255, 0.45);
+    }
+
+    #menu .credit span {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.38);
+      text-align: right;
+    }
+
+    #menu .github {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      margin-bottom: 16px;
+      padding: 11px 16px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      text-decoration: none;
+      color: rgba(255, 255, 255, 0.88);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+
+    #menu .github:hover {
+      background: rgba(255, 255, 255, 0.13);
+      border-color: rgba(255, 255, 255, 0.20);
+      color: #fff;
+    }
+
+    #menu .github:active {
+      transform: scale(0.985);
+    }
+
+    #menu .github svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+      flex: none;
+    }
+
+    #menu .github .star {
+      width: 13px;
+      height: 13px;
+      opacity: 0.55;
+      transition: opacity 180ms ease, transform 260ms cubic-bezier(0.18, 0.9, 0.26, 1);
+    }
+
+    #menu .github:hover .star {
+      opacity: 1;
+      transform: rotate(72deg);
     }
 
     #menu .hint {
-      margin-top: 2px;
-      font-size: 11.5px;
-      letter-spacing: 0.4px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
       text-align: center;
-      color: rgba(22, 33, 29, 0.42);
+      color: rgba(255, 255, 255, 0.32);
     }
 
     #menu .hint kbd {
       font: inherit;
-      padding: 1px 6px;
-      border-radius: 5px;
-      background: rgba(255, 255, 255, 0.55);
-      border: 1px solid rgba(22, 33, 29, 0.12);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-      color: rgba(22, 33, 29, 0.6);
-    }
-
-    .separator {
-        border: none;
-        border-top: 1px solid #444;
-        margin: 20px 0;
-    }
-
-    .row-toggle {
-        flex-direction: row !important;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .switch {
-        position: relative;
-        display: inline-block;
-        width: 42px;
-        height: 24px;
-    }
-
-    .switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-
-    .slider {
-        position: absolute;
-        cursor: pointer;
-        inset: 0;
-        background-color: rgba(22, 33, 29, 0.14);
-        border-radius: 24px;
-        box-shadow: inset 0 1px 2px rgba(10, 22, 18, 0.18), 0 1px 0 rgba(255, 255, 255, 0.5);
-        transition: background-color 0.2s ease;
-    }
-
-    .slider::before {
-        position: absolute;
-        content: "";
-        height: 18px;
-        width: 18px;
-        left: 3px;
-        bottom: 3px;
-        background: radial-gradient(circle at 35% 30%, #ffffff, #eef3ef 70%);
-        border-radius: 50%;
-        box-shadow: 0 2px 4px rgba(10, 22, 18, 0.2);
-        transition: transform 0.2s cubic-bezier(0.18, 0.9, 0.26, 1);
-    }
-
-    .switch input:checked + .slider {
-        background-color: #5f9c7d;
-    }
-
-    .switch input:checked + .slider::before {
-        transform: translateX(18px);
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      color: rgba(255, 255, 255, 0.52);
     }
   </style>
 </head>
@@ -276,40 +341,68 @@
 <body>
   <div id="menu">
     <div class="panel">
-      <canvas id="glassbg"></canvas>
-      <div class="panel-inner">
-        <div class="panel-label">Paused</div>
+      <div class="panel-label">Paused</div>
+
+      <div class="group">
+        <div class="group-title">Camera</div>
         <div class="row row-toggle">
-            <div class="name">Auto Exposure</div>
-            <label class="switch">
-                <input type="checkbox" id="AutoExposureToggle" checked>
-                <span class="slider"></span>
-            </label>
+          <div class="name">Auto Exposure</div>
+          <label class="switch">
+            <input type="checkbox" id="AutoExposureToggle" checked>
+            <span class="track"></span>
+          </label>
         </div>
+        <div class="manual">
+          <div class="row">
+            <div class="name">Shutter Speed <small id="shutterSpeed">1/125s</small></div>
+            <input type="range" id="shutterSpeedVal" min="2" max="1000" value="125">
+          </div>
+          <div class="row">
+            <div class="name">Aperture <small id="aperture">f/16</small></div>
+            <input type="range" id="apertureVal" min="1" max="32" step="1" value="16">
+          </div>
+          <div class="row">
+            <div class="name">ISO <small id="ISO">100</small></div>
+            <input type="range" id="ISOVal" min="50" max="8000" step="50" value="100">
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-title">Audio</div>
         <div class="row">
-            <div class="row">
-                <div class="name">Shutter Speed <small id="shutterSpeed">1/125s</small></div>
-                <input type="range" id="shutterSpeedVal" min="2" max="1000" value="125">
-            </div>
-            <div class="row">
-                <div class="name">Aperture <small id="aperture">f/16</small></div>
-                <input type="range" id="apertureVal" min="1" max="32" step="1" value="16">
-            </div>
-            <div class="row">
-                <div class="name">ISO <small id="ISO">100</small></div>
-                <input type="range" id="ISOVal" min="50" max="8000" step="50" value="0">
-            </div>
-        <hr class="separator">
-        <div class="row">
-            <div class="name">Music <small id="musicPct">50%</small></div>
+          <div class="name">Music <small id="musicPct">50%</small></div>
           <input type="range" id="musicVol" min="0" max="100" value="50">
         </div>
         <div class="row">
           <div class="name">Sound Effects <small id="sfxPct">50%</small></div>
           <input type="range" id="sfxVol" min="0" max="100" value="50">
         </div>
-        <div class="hint">Press <kbd>Esc</kbd> to resume</div>
       </div>
+
+      <div class="group">
+        <div class="group-title">Credits</div>
+        <div class="credit">
+          <a href="https://github.com/SimonSeider" target="_blank" rel="noopener noreferrer">SimonSeider</a>
+          <span>Creator</span>
+        </div>
+        <div class="credit">
+          <a href="https://github.com/f1nel-egy" target="_blank" rel="noopener noreferrer">f1nel-egy</a>
+          <span>Camera &amp; exposure</span>
+        </div>
+      </div>
+
+      <a class="github" href="https://github.com/SimonSeider/touch-grass" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+        </svg>
+        <span>Star on GitHub</span>
+        <svg class="star" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
+        </svg>
+      </a>
+
+      <div class="hint">Press <kbd>Esc</kbd> to resume</div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
