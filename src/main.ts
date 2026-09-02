@@ -103,13 +103,18 @@ const sfxSlider = document.getElementById('sfxVol') as HTMLInputElement;
 const musicPct = document.getElementById('musicPct') as HTMLElement;
 const sfxPct = document.getElementById('sfxPct') as HTMLElement;
 
+const shutterSpeedSlider = document.getElementById('shutterSpeedVal') as HTMLInputElement;
+const apertureSlider = document.getElementById('apertureVal') as HTMLInputElement;
+const ISOSlider = document.getElementById('ISOVal') as HTMLInputElement;
+const shutterSpeedPct = document.getElementById('shutterSpeed') as HTMLElement;
+const aperturePct = document.getElementById('aperture') as HTMLElement;
+const ISOPct = document.getElementById('ISO') as HTMLElement;
+
+const autoExposureToggle = document.getElementById('AutoExposureToggle') as HTMLInputElement;
+
 let menuOpen = false;
 
 let menuBlur = 0;
-
-function updateSliderFill(el: HTMLInputElement) {
-  el.style.setProperty('--fill', el.value + '%');
-}
 
 function setMenu(open: boolean) {
   menuOpen = open;
@@ -124,7 +129,12 @@ function setMenu(open: boolean) {
   }
 }
 
-function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void) {
+function updateSliderFill(el: HTMLInputElement) {
+  el.style.setProperty('--fill', el.value + '%');
+}
+
+// I'm sorry Simon
+/*function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void) {
   const update = () => {
     const v = Number(el.value) / 100;
     label.textContent = Math.round(v * 100) + '%';
@@ -134,12 +144,102 @@ function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number)
   el.addEventListener('input', update);
   el.addEventListener('change', update);
   update();
+}*/
+
+interface SliderOptions {
+  // Map raw slider value to your custom math
+  transform?: (raw: number) => number;
+  // Custom display string for the label
+  format?: (val: number, raw: number) => string;
+  // Toggle track fill line
+  showFill?: boolean;
 }
 
-bindSlider(musicSlider, musicPct, (v) => audio.setMusicVolume(v));
-bindSlider(sfxSlider, sfxPct, (v) => audio.setSfxVolume(v));
+// TODO: Fix the damn UI for the camera settings
+function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void, options: SliderOptions = {}){
+  const {
+    transform = (raw) => raw,
+    format = (v) => `${v}`,
+    showFill = true,
+  } = options;
+
+  const update = () => {
+    const raw = Number(el.value);
+    const val = transform(raw);
+    label.textContent = format(val, raw);
+
+    if(showFill)
+      updateSliderFill(el);
+    else
+      el.style.setProperty('--fill-pct', '0%');
+
+    apply(val);
+  };
+
+  el.addEventListener('input', update);
+  update();
+}
+
+function bindToggle(el: HTMLInputElement, apply: (v: boolean) => void){
+  const update = () => {
+    apply(el.checked);
+  };
+
+  el.addEventListener('change', update);
+  update();
+}
+
+bindSlider(musicSlider, musicPct, (v) => audio.setMusicVolume(v), {
+  transform: (raw) => raw / 100,
+  format: (_, raw) => `${Math.round(raw)}%`,
+});
+
+bindSlider(sfxSlider, sfxPct, (v) => audio.setSfxVolume(v), {
+  transform: (raw) => raw / 100,
+  format: (_, raw) => `${Math.round(raw)}%`,
+});
+
 audio.setMusicVolume(0.5);
 audio.setSfxVolume(0.5);
+
+bindSlider(shutterSpeedSlider, shutterSpeedPct,
+  (s) => {
+    if(post !== null)
+        post.setShutterSpeed(s);
+  },
+  {
+    transform: (raw) => 1 / raw,
+    format: (_, raw) => (raw >= 1 ? `1/${raw}s` : `${(1 / raw).toFixed(1)}s`),
+    showFill: false,
+  });
+
+bindSlider(apertureSlider, aperturePct,
+  (a) => {
+    if(post !== null)
+        post.setAperture(a);
+  },
+  {
+    transform: (raw) => raw,
+    format: (val) => `f/${val.toFixed(1)}`,
+    showFill: false,
+  });
+
+bindSlider(ISOSlider, ISOPct,
+  (i) => {
+    if(post !== null)
+        post.setISO(i);
+  },
+  {
+    transform: (raw) => raw,
+    format: (val) => `${val}`,
+    showFill: false,
+  });
+
+bindToggle(autoExposureToggle,
+  (c) => {
+    if(post !== null)
+        post.setAutoExposure(c);
+  })
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {

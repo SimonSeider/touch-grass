@@ -214,6 +214,62 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       color: rgba(22, 33, 29, 0.6);
     }
+
+    .separator {
+        border: none;
+        border-top: 1px solid #444;
+        margin: 20px 0;
+    }
+
+    .row-toggle {
+        flex-direction: row !important;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 42px;
+        height: 24px;
+    }
+
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background-color: rgba(22, 33, 29, 0.14);
+        border-radius: 24px;
+        box-shadow: inset 0 1px 2px rgba(10, 22, 18, 0.18), 0 1px 0 rgba(255, 255, 255, 0.5);
+        transition: background-color 0.2s ease;
+    }
+
+    .slider::before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background: radial-gradient(circle at 35% 30%, #ffffff, #eef3ef 70%);
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(10, 22, 18, 0.2);
+        transition: transform 0.2s cubic-bezier(0.18, 0.9, 0.26, 1);
+    }
+
+    .switch input:checked + .slider {
+        background-color: #5f9c7d;
+    }
+
+    .switch input:checked + .slider::before {
+        transform: translateX(18px);
+    }
   </style>
 </head>
 
@@ -223,8 +279,29 @@
       <canvas id="glassbg"></canvas>
       <div class="panel-inner">
         <div class="panel-label">Paused</div>
+        <div class="row row-toggle">
+            <div class="name">Auto Exposure</div>
+            <label class="switch">
+                <input type="checkbox" id="AutoExposureToggle" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
         <div class="row">
-          <div class="name">Music <small id="musicPct">50%</small></div>
+            <div class="row">
+                <div class="name">Shutter Speed <small id="shutterSpeed">1/125s</small></div>
+                <input type="range" id="shutterSpeedVal" min="2" max="1000" value="125">
+            </div>
+            <div class="row">
+                <div class="name">Aperture <small id="aperture">f/16</small></div>
+                <input type="range" id="apertureVal" min="1" max="32" step="1" value="16">
+            </div>
+            <div class="row">
+                <div class="name">ISO <small id="ISO">100</small></div>
+                <input type="range" id="ISOVal" min="50" max="8000" step="50" value="0">
+            </div>
+        <hr class="separator">
+        <div class="row">
+            <div class="name">Music <small id="musicPct">50%</small></div>
           <input type="range" id="musicVol" min="0" max="100" value="50">
         </div>
         <div class="row">

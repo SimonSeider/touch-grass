@@ -12,9 +12,11 @@ import {
   ev100FromLuminance,
   sceneExposureFromEv100,
   adaptEv100,
+  ev100FromCamera,
   type ExposureState,
 } from './exposure';
 import type { RenderParams } from './rendermode';
+import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 export interface PostSetup {
   render: (time: number, dt: number) => void;
@@ -23,6 +25,11 @@ export interface PostSetup {
 
   setPauseBlur: (amount: number) => void;
   setParams: (m: RenderParams) => void;
+
+  setShutterSpeed: (s: number) => void;
+  setAperture: (a: number) => void;
+  setISO: (i: number) => void;
+  setAutoExposure: (a: boolean) => void;
 
   exposureInfo: () => { exposure: number; ev100: number; luminance: number };
   dispose: () => void;
@@ -38,8 +45,8 @@ export async function createPostprocessing(
   const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
   const { SSAOPass } = await import('three/addons/postprocessing/SSAOPass.js');
   const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
-  const { ShaderPass } = await import('three/addons/postprocessing/ShaderPass.js');
   const { Pass, FullScreenQuad } = await import('three/addons/postprocessing/Pass.js');
+  const { ShaderPass } = await import('three/addons/postprocessing/ShaderPass.js');
 
   const cloudTextures = createCloudTextures(renderer);
 
@@ -141,12 +148,15 @@ export async function createPostprocessing(
       uContrast: { value: 1.06 },
       uSaturation: { value: 1.06 },
       uWarmth: { value: 0.10 },
-      uGrain: { value: 0.022 },
+      //uGrain: { value: 0.022 },
       uChroma: { value: 0.0035 },
       uAspect: { value: size.width / size.height },
 
+      uReadNoise: { value: 0.002 * (100.0 / 100.0) },
+      uShotNoise: { value: 0.01 * Math.sqrt((100.0 / 100.0) / Math.max((0.008 / (16.0 * 16.0)), 0.0001))},
+
       uShadowTint: { value: new THREE.Color(0.88, 0.95, 1.06) },
-      uHighlightTint: { value: new THREE.Color(1.05, 1.00, 0.92) },
+      uHighlightTint: { value: new THREE.Color(1.05, 1.00, 0.92) }, 
     },
     vertexShader: postGradeVert,
     fragmentShader: postGradeFrag,
@@ -157,6 +167,11 @@ export async function createPostprocessing(
   let autoExposure = true;
   let manualExposure = 0.26;
   let compensation = 0;
+
+  let shutterSpeed = 0.008;
+  let aperture = 16;
+  let ISO = 100;
+  
   const exposureState: ExposureState = { ev100: SUNNY_16_EV100 };
 
   const render = (time: number, dt: number) => {
@@ -164,13 +179,21 @@ export async function createPostprocessing(
     gradePass.uniforms.uTime.value = time;
 
     if (autoExposure) {
-
       const targetEv = ev100FromLuminance(meter.luminance * NITS_PER_SCENE_UNIT) - compensation;
       const ev = adaptEv100(exposureState, targetEv, Math.min(dt, 0.1));
       gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev);
+
+      const physicalEv100AtIso100 = ev100FromCamera(aperture, shutterSpeed, 100);
+      ISO = Math.max(100.0, 100.0 * Math.pow(2, physicalEv100AtIso100 - ev));
     } else {
-      gradePass.uniforms.uExposure.value = manualExposure * Math.pow(2, compensation);
+      gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) * Math.pow(2, compensation));
     }
+
+    const sensorLight = (shutterSpeed / (aperture * aperture));
+    const ISOGain = ISO / 100.0;
+
+    gradePass.uniforms.uReadNoise.value = 0.00005 * ISOGain; 
+    gradePass.uniforms.uShotNoise.value = 0.0005 * Math.sqrt(ISOGain / Math.max(sensorLight, 0.001));
 
     renderer.setRenderTarget(depthTarget);
     renderer.render(scene, camera);
@@ -209,6 +232,18 @@ export async function createPostprocessing(
         ev100: exposureState.ev100,
         luminance: meter.luminance,
       };
+    },
+    setShutterSpeed(s: number){
+      shutterSpeed = Number(s);
+    },
+    setAperture(a: number){
+      aperture = Number(a);
+    },
+    setISO(i: number){
+      ISO = Number(i);
+    },
+    setAutoExposure(a: boolean){
+      autoExposure = a;
     },
     setParams(m) {
       bloomPass.strength = m.bloom;

@@ -8,17 +8,26 @@ uniform float uVignette;
 uniform float uContrast;
 uniform float uSaturation;
 uniform float uWarmth;
-uniform float uGrain;
+//uniform float uGrain;
 uniform float uChroma;
 uniform float uAspect;
 uniform vec3 uShadowTint;
 uniform vec3 uHighlightTint;
+
+uniform float uReadNoise;
+uniform float uShotNoise;
 
 in vec2 vUv;
 out vec4 outColor;
 
 float hash21(vec2 p) {
   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+vec3 hash32(vec2 p){
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yxz + 33.33);
+  return fract((p3.xxz + p3.yzx) * p3.zyx);
 }
 
 vec3 ACESFilm(vec3 x) {
@@ -47,6 +56,22 @@ void main() {
   }
 
   col *= uExposure;
+  
+  if(uReadNoise > 0.0 || uShotNoise > 0.0){
+    vec2 pixelUv = vUv * vec2(1920.0, 1080.0);
+    //vec3 rawNoise = hash32(pixelUv + fract(uTime) * 613.0) - 0.5;
+
+    vec2 sensorUv = floor(vUv * vec2(1920.0, 1080.0) * 0.5) * 2.0;
+    vec3 rawNoise = hash32(sensorUv + fract(uTime) * 613.0) - 0.5;
+
+    vec3 shot = sqrt(max(col, 0.0)) * uShotNoise;
+    vec3 read = vec3(uReadNoise);
+
+    vec3 chromaWeight = vec3(1.4, 0.8, 1.3); 
+    col += rawNoise * (shot + read) * chromaWeight;
+    //col += rawNoise * (shot + read);
+    col = max(col, 0.0);
+  }
 
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(vec3(lum), col, uSaturation);
@@ -64,12 +89,12 @@ void main() {
   col = ACESFilm(max(col, 0.0));
   col = pow(col, vec3(1.0 / 2.2));
 
-  if (uGrain > 0.0) {
+  /*if (uGrain > 0.0) {
     float g = hash21(vUv * vec2(1920.0, 1080.0) + fract(uTime) * 613.0) - 0.5;
 
     float weight = 1.0 - smoothstep(0.45, 0.95, dot(col, vec3(0.2126, 0.7152, 0.0722)));
     col += g * uGrain * mix(0.35, 1.0, weight);
-  }
+  }*/
 
   outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
