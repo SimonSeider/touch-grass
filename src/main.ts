@@ -1,0 +1,202 @@
+import * as THREE from 'three';
+import { createSky } from './sky';
+import { createTerrain } from './terrain';
+import { createGrass } from './grass';
+import { createPlayer } from './player';
+import { createParticles } from './particles';
+import { createAudio } from './audio';
+import { createPostprocessing, type PostSetup } from './postprocessing';
+import { initUiGlass } from './uiGlass';
+import { sunTint, sunEnergy } from './skymath';
+import { createSkyProbe, iblUniforms } from './skyprobe';
+import { RENDER_PARAMS } from './rendermode';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+renderer.toneMapping = THREE.NoToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xbfe3d2, 260, 1500);
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
+
+const SUN_DIST = 500;
+const SUN_SPEED = 0.025;
+const sun = new THREE.DirectionalLight(0xfff2d0, 3.2);
+scene.add(sun);
+scene.add(sun.target);
+
+const sunDir = new THREE.Vector3(120, 200, 80).normalize();
+const sunColor = new THREE.Color(0xffe9c0);
+
+const sky = createSky();
+scene.add(sky.group);
+
+const skyProbe = createSkyProbe(renderer, sky.probeScene);
+
+const terrainLayer = createTerrain();
+scene.add(terrainLayer.group);
+terrainLayer.material.light = sun;
+
+const grassLayer = createGrass(terrainLayer.heightAt, terrainLayer.shadowUniforms);
+scene.add(grassLayer.group);
+grassLayer.material.light = sun;
+
+const particles = createParticles();
+scene.add(particles.points);
+
+const player = createPlayer(camera, terrainLayer.heightAt);
+
+const audio = createAudio();
+
+const cloudCfg = { sunDir, sunColor: sunColor.clone() };
+let post: PostSetup | null = null;
+
+function applyRenderParams() {
+  const m = RENDER_PARAMS;
+
+  sky.setProbeSunRadiance(m.sunRadiance);
+
+  const t = terrainLayer.material.uniforms;
+  t.uSunRadiance.value = m.sunRadiance;
+  t.uRim.value = m.rim;
+  t.uFogDensity.value = m.fogDensity;
+
+  const g = grassLayer.material.uniforms;
+  g.uSunRadiance.value = m.grassSunRadiance;
+  g.uFogDensity.value = m.fogDensity;
+
+  sky.setHaze(m.haze);
+  post?.setParams(m);
+}
+
+async function initPost() {
+  post = await createPostprocessing(renderer, scene, camera, cloudCfg);
+
+  post.setParams(RENDER_PARAMS);
+}
+
+function renderDirect() {
+  renderer.render(scene, camera);
+}
+
+applyRenderParams();
+initPost();
+
+player.lock();
+
+function startAudioOnce() {
+  audio.start(1.6);
+  window.removeEventListener('pointerdown', startAudioOnce);
+  window.removeEventListener('keydown', startAudioOnce);
+}
+window.addEventListener('pointerdown', startAudioOnce);
+window.addEventListener('keydown', startAudioOnce);
+
+const menuEl = document.getElementById('menu') as HTMLDivElement;
+const glassCanvas = document.getElementById('glassbg') as HTMLCanvasElement;
+const glassBg = initUiGlass(glassCanvas);
+const musicSlider = document.getElementById('musicVol') as HTMLInputElement;
+const sfxSlider = document.getElementById('sfxVol') as HTMLInputElement;
+const musicPct = document.getElementById('musicPct') as HTMLElement;
+const sfxPct = document.getElementById('sfxPct') as HTMLElement;
+
+let menuOpen = false;
+
+let menuBlur = 0;
+
+function updateSliderFill(el: HTMLInputElement) {
+  el.style.setProperty('--fill', el.value + '%');
+}
+
+function setMenu(open: boolean) {
+  menuOpen = open;
+  player.setPaused(open);
+  menuEl.classList.toggle('open', open);
+  glassBg.setVisible(open);
+  if (open) {
+    glassBg.setSize();
+    if (document.pointerLockElement) document.exitPointerLock();
+  } else {
+    player.lock();
+  }
+}
+
+function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void) {
+  const update = () => {
+    const v = Number(el.value) / 100;
+    label.textContent = Math.round(v * 100) + '%';
+    updateSliderFill(el);
+    apply(v);
+  };
+  el.addEventListener('input', update);
+  el.addEventListener('change', update);
+  update();
+}
+
+bindSlider(musicSlider, musicPct, (v) => audio.setMusicVolume(v));
+bindSlider(sfxSlider, sfxPct, (v) => audio.setSfxVolume(v));
+audio.setMusicVolume(0.5);
+audio.setSfxVolume(0.5);
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') {
+    e.preventDefault();
+    setMenu(!menuOpen);
+  }
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  if (post) post.setSize(window.innerWidth, window.innerHeight);
+  glassBg.setSize();
+});
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  player.update(dt);
+  audio.update(dt, player.isWalking());
+
+  const az = t * SUN_SPEED;
+  const el = 0.15 + (0.5 + 0.5 * Math.sin(t * SUN_SPEED * 1.4)) * 0.35;
+  sunDir.set(Math.cos(az), Math.sin(el), Math.sin(az) * 0.85).normalize();
+  sun.position.copy(sunDir).multiplyScalar(SUN_DIST);
+  sun.target.position.set(0, 0, 0);
+
+  sunTint(sunDir.y, sunColor);
+  sun.color.copy(sunColor);
+
+  sun.intensity = sunEnergy(sunDir.y);
+  cloudCfg.sunColor.copy(sunColor);
+
+  sky.update(dt, t, camera.position, sunDir);
+
+  skyProbe.update(dt);
+  grassLayer.update(t, camera.position);
+  terrainLayer.update(camera.position);
+  particles.update(t, camera.position, sunDir, sunColor);
+  glassBg.render(t);
+
+  const blurTarget = menuOpen ? 1 : 0;
+  if (menuBlur !== blurTarget) {
+
+    const k = 1 - Math.exp(-dt / 0.09);
+    menuBlur += (blurTarget - menuBlur) * k;
+    if (Math.abs(blurTarget - menuBlur) < 0.002) menuBlur = blurTarget;
+  }
+  if (post) {
+    post.setPauseBlur(menuBlur);
+    post.render(t, dt);
+  } else {
+    renderDirect();
+  }
+}
+animate();
