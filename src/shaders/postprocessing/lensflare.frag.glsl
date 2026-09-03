@@ -2,6 +2,7 @@ precision highp float;
 precision highp int;
 
 in vec2 vUv;
+in float vSunOpen;
 out vec4 outColor;
 
 uniform sampler2D tDiffuse;
@@ -20,8 +21,9 @@ float glowDist(float d, float soft) {
 void main() {
   vec4 scene = texture(tDiffuse, vUv);
   vec3 flare = vec3(0.0);
+  float visible = uSunVisible * vSunOpen;
 
-  if (uSunVisible > 0.5) {
+  if (visible > 0.002) {
     vec2 p = vUv;
     vec2 sun = uSunScreen;
     vec2 dir = normalize(sun - vec2(0.5));
@@ -59,5 +61,5 @@ void main() {
     flare += vec3(0.5, 0.7, 1.0) * ring * 0.6 * (1.0 - scale);
   }
 
-  outColor = scene + vec4(flare, 0.0);
+  outColor = scene + vec4(flare * visible, 0.0);
 }

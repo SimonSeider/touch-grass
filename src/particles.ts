@@ -4,7 +4,11 @@ import particlesFrag from './shaders/particles/particles.frag.glsl?raw';
 
 export interface ParticleLayer {
   points: THREE.Points;
+  scene: THREE.Scene;
   update: (t: number, camPos: THREE.Vector3, sunDir: THREE.Vector3, sunColor: THREE.Color) => void;
+  setDepthTexture: (texture: THREE.Texture, near: number, far: number) => void;
+  setSize: (width: number, height: number, pixelRatio: number) => void;
+  setRadiance: (radiance: number) => void;
   dispose: () => void;
 }
 
@@ -47,24 +51,46 @@ export function createParticles(): ParticleLayer {
       uSunDir: { value: new THREE.Vector3(0, 1, 0) },
       uSunColor: { value: new THREE.Color(1, 0.97, 0.92) },
       uSunEnergy: { value: 1 },
+      uRadiance: { value: 3.0 },
+      tSceneDepth: { value: null },
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uNear: { value: 0.1 },
+      uFar: { value: 4000 },
     },
     vertexShader: particlesVert,
     fragmentShader: particlesFrag,
     transparent: true,
     depthWrite: false,
+    depthTest: false,
 
     blending: THREE.CustomBlending,
     blendSrc: THREE.OneFactor,
-    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendDst: THREE.OneFactor,
   });
 
   const points = new THREE.Points(geo, mat);
   points.frustumCulled = false;
 
+  const scene = new THREE.Scene();
+  scene.add(points);
+
   let last = 0;
 
   return {
     points,
+    scene,
+    setDepthTexture(texture, near, far) {
+      mat.uniforms.tSceneDepth.value = texture;
+      mat.uniforms.uNear.value = near;
+      mat.uniforms.uFar.value = far;
+    },
+    setSize(width, height, pixelRatio) {
+      mat.uniforms.uResolution.value.set(width, height);
+      mat.uniforms.uPixelRatio.value = pixelRatio;
+    },
+    setRadiance(radiance) {
+      mat.uniforms.uRadiance.value = radiance;
+    },
     update(t, camPos, sunDir, sunColor) {
       const dt = Math.min(Math.max(t - last, 0), 0.05);
       last = t;
@@ -76,6 +102,7 @@ export function createParticles(): ParticleLayer {
       mat.uniforms.uSunEnergy.value = THREE.MathUtils.smoothstep(sunDir.y, -0.02, 0.22);
 
       const p = geo.attributes.position as THREE.BufferAttribute;
+      let respawned = false;
 
       const windX = 0.55 + Math.sin(t * 0.21) * 0.35;
       const windZ = 0.18 + Math.cos(t * 0.17) * 0.30;
@@ -86,6 +113,7 @@ export function createParticles(): ParticleLayer {
         if (dx * dx + dz * dz > SPREAD * SPREAD || dy < -HEIGHT * 0.5) {
 
           place(i, camPos, dy < -HEIGHT * 0.5);
+          respawned = true;
           continue;
         }
         const s = seeds[i];
@@ -96,6 +124,10 @@ export function createParticles(): ParticleLayer {
         p.setZ(i, pz + (windZ + Math.sin(swirl * 0.8) * 0.35) * dt);
       }
       p.needsUpdate = true;
+      if (respawned) {
+        geo.attributes.aScale.needsUpdate = true;
+        geo.attributes.aSeed.needsUpdate = true;
+      }
     },
     dispose() {
       mat.dispose();

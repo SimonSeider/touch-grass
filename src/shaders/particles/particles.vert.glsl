@@ -9,6 +9,7 @@ uniform float uFadeFar;
 varying float vFade;
 varying float vSeed;
 varying vec3 vViewDir;
+varying float vViewDepth;
 
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -16,6 +17,7 @@ void main() {
 
   vSeed = aSeed;
   vViewDir = normalize((modelMatrix * vec4(position, 1.0)).xyz - cameraPosition);
+  vViewDepth = dist;
 
   vFade = smoothstep(0.35, 3.5, dist) * (1.0 - smoothstep(uFadeNear, uFadeFar, dist));
 

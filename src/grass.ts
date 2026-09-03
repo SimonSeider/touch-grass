@@ -14,18 +14,23 @@ export interface GrassLayer {
   group: THREE.Group;
   material: THREE.ShaderMaterial & { light: THREE.DirectionalLight | null };
   update: (t: number, camPos: THREE.Vector3) => void;
+  setViewDistance: (chunks: number) => void;
+  setDensity: (scale: number) => void;
+  setWireframe: (on: boolean) => void;
+  chunkCount: () => number;
   dispose: () => void;
 }
 
 type ShaderMaterialWithLight = THREE.ShaderMaterial & { light: THREE.DirectionalLight | null };
 
 const CHUNK = 16;
-const LOAD_RADIUS = 5;
+const DEFAULT_LOAD_RADIUS = 5;
 const SEGS = 3;
+const BUILD_BUDGET = 4;
 
 const GRID_BASE = 96;
-function gridFor(dist: number): number {
-  return Math.max(8, Math.round(GRID_BASE / (1.0 + dist * 0.28)));
+function gridFor(dist: number, density: number): number {
+  return Math.max(8, Math.round((GRID_BASE * density) / (1.0 + dist * 0.28)));
 }
 
 function buildGroundTexture(): THREE.DataTexture {
@@ -68,6 +73,9 @@ const WIND_ST = new THREE.Vector4(1 / 128, 1 / 128, 0, 0);
 export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUniforms): GrassLayer {
   const group = new THREE.Group();
   const chunks = new Map<string, { mesh: THREE.InstancedMesh; grid: number }>();
+
+  let loadRadius = DEFAULT_LOAD_RADIUS;
+  let density = 1;
 
   const groundTex = buildGroundTexture();
   const windTex = loadTexture(windDistUrl);
@@ -195,18 +203,23 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
     const ccx = Math.floor(camPos.x / CHUNK);
     const ccz = Math.floor(camPos.z / CHUNK);
     const wanted = new Set<string>();
-    for (let dz = -LOAD_RADIUS; dz <= LOAD_RADIUS; dz++) {
-      for (let dx = -LOAD_RADIUS; dx <= LOAD_RADIUS; dx++) {
+    const missing: Array<{ cx: number; cz: number; key: string; dist: number }> = [];
+    for (let dz = -loadRadius; dz <= loadRadius; dz++) {
+      for (let dx = -loadRadius; dx <= loadRadius; dx++) {
         const dist = Math.max(Math.abs(dx), Math.abs(dz));
         const k = ccx + dx + ',' + (ccz + dz);
         wanted.add(k);
-        if (!chunks.has(k)) {
-          const grid = gridFor(dist);
-          const mesh = buildMesh(ccx + dx, ccz + dz, grid);
-          chunks.set(k, { mesh, grid });
-          group.add(mesh);
-        }
+        if (!chunks.has(k)) missing.push({ cx: ccx + dx, cz: ccz + dz, key: k, dist });
       }
+    }
+    // Building every missing chunk at once stalls for seconds after a view-distance
+    // or density change, so fill in nearest-first over a few frames instead.
+    missing.sort((a, b) => a.dist - b.dist);
+    for (const m of missing.slice(0, BUILD_BUDGET)) {
+      const grid = gridFor(m.dist, density);
+      const mesh = buildMesh(m.cx, m.cz, grid);
+      chunks.set(m.key, { mesh, grid });
+      group.add(mesh);
     }
     for (const [k, ch] of chunks) {
       if (!wanted.has(k)) {
@@ -218,10 +231,36 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
     }
   }
 
+  function dropChunks() {
+    for (const [, ch] of chunks) {
+      group.remove(ch.mesh);
+      ch.mesh.dispose();
+      ch.mesh.geometry.dispose();
+    }
+    chunks.clear();
+  }
+
   return {
     group,
     material: mat as unknown as ShaderMaterialWithLight,
     update,
+    setViewDistance(next) {
+      const radius = Math.max(1, Math.round(next));
+      if (radius === loadRadius) return;
+      loadRadius = radius;
+    },
+    setDensity(scale) {
+      const next = Math.max(0.05, scale);
+      if (Math.abs(next - density) < 1e-4) return;
+      density = next;
+      dropChunks();
+    },
+    setWireframe(on) {
+      mat.wireframe = on;
+    },
+    chunkCount() {
+      return chunks.size;
+    },
     dispose() {
       mat.dispose();
       baseGeo.dispose();

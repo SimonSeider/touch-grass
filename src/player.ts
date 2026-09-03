@@ -2,19 +2,29 @@ import * as THREE from 'three';
 
 export type HeightFn = (x: number, z: number) => number;
 
+export interface PlayerTuning {
+  sensitivity: number;
+  invertY: boolean;
+  walkSpeed: number;
+  runSpeed: number;
+  /** Peak height of a jump, in metres. */
+  jumpHeight: number;
+  sprintToggle: boolean;
+}
+
 export interface Player {
   update: (dt: number) => void;
   lock: () => void;
   isWalking: () => boolean;
   setPaused: (paused: boolean) => void;
+  setTuning: (tuning: Partial<PlayerTuning>) => void;
+  position: () => THREE.Vector3;
 }
 
 const EYE = 1.65;
 const GRAVITY = 24;
-const WALK = 3.4;
-const RUN = 6.2;
-const JUMP = 8.2;
 const RADIUS = 0.4;
+const LOOK_SPEED = 0.0022;
 
 interface Keys {
   w: boolean; s: boolean; a: boolean; d: boolean;
@@ -40,6 +50,16 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
   let crouching = false;
   let paused = false;
   let hadLockBeforePause = false;
+  let sprinting = false;
+
+  const tuning: PlayerTuning = {
+    sensitivity: 1,
+    invertY: false,
+    walkSpeed: 3.4,
+    runSpeed: 6.2,
+    jumpHeight: 1.4,
+    sprintToggle: false,
+  };
 
   window.addEventListener('keydown', (e) => {
     switch (e.code) {
@@ -47,8 +67,11 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
       case 'KeyS': keys.s = true; break;
       case 'KeyA': keys.a = true; break;
       case 'KeyD': keys.d = true; break;
-      case 'ShiftLeft': case 'ShiftRight': keys.shift = true; break;
-      case 'Space': keys.space = true; e.preventDefault(); break;
+      case 'ShiftLeft': case 'ShiftRight':
+        if (tuning.sprintToggle && !keys.shift) sprinting = !sprinting;
+        keys.shift = true;
+        break;
+      case 'Space': keys.space = true; if (!paused) e.preventDefault(); break;
       case 'ControlLeft': keys.ctrl = true; break;
     }
   });
@@ -67,8 +90,9 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
   const brush = new THREE.Vector2();
   const lastPointer = new THREE.Vector2();
   function applyLook(dx: number, dy: number) {
-    yaw -= dx * 0.0022;
-    pitch -= dy * 0.0022;
+    const speed = LOOK_SPEED * tuning.sensitivity;
+    yaw -= dx * speed;
+    pitch -= dy * speed * (tuning.invertY ? -1 : 1);
     pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
@@ -151,7 +175,8 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
     right.y = 0;
     right.normalize();
 
-    const speed = keys.shift ? RUN : WALK;
+    const running = tuning.sprintToggle ? sprinting : keys.shift;
+    const speed = running ? tuning.runSpeed : tuning.walkSpeed;
     const wish = new THREE.Vector3();
     if (keys.w) wish.add(forward);
     if (keys.s) wish.sub(forward);
@@ -164,7 +189,7 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
     velocity.z += (wish.z - velocity.z) * Math.min(1, accel * dt);
 
     if (keys.space && grounded) {
-      velocity.y = JUMP;
+      velocity.y = Math.sqrt(2 * GRAVITY * tuning.jumpHeight);
       grounded = false;
     }
 
@@ -195,6 +220,13 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
     lock,
     isWalking() {
       return grounded && Math.hypot(velocity.x, velocity.z) > 0.5;
+    },
+    setTuning(next) {
+      Object.assign(tuning, next);
+      if (!tuning.sprintToggle) sprinting = false;
+    },
+    position() {
+      return camera.position;
     },
     setPaused(value: boolean) {
       paused = value;

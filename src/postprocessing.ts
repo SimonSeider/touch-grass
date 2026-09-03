@@ -19,6 +19,18 @@ import {
 import type { RenderParams } from './rendermode';
 import type { ShadowFieldUniforms } from './terrain';
 
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** A scene composited on top of the fog and cloud passes, depth-tested against the prepass. */
+export interface OverlayLayer {
+  scene: THREE.Scene;
+  setDepthTexture: (texture: THREE.Texture, near: number, far: number) => void;
+  setSize: (width: number, height: number, pixelRatio: number) => void;
+}
+
 export interface PostSetup {
   render: (time: number, dt: number) => void;
   updateClouds: (camera: THREE.PerspectiveCamera, camPos: THREE.Vector3, sunDir: THREE.Vector3, sunCol: THREE.Color) => void;
@@ -31,8 +43,9 @@ export interface PostSetup {
   setAperture: (a: number) => void;
   setISO: (i: number) => void;
   setAutoExposure: (a: boolean) => void;
+  setSSAO: (enabled: boolean) => void;
 
-  exposureInfo: () => { exposure: number; ev100: number; luminance: number };
+  exposureInfo: () => { exposure: number; ev100: number; luminance: number; iso: number };
   dispose: () => void;
 }
 
@@ -42,6 +55,7 @@ export async function createPostprocessing(
   camera: THREE.PerspectiveCamera,
   cloudCfg: { sunDir: THREE.Vector3; sunColor: THREE.Color; sunEnergy: number },
   shadowUniforms: ShadowFieldUniforms,
+  overlay?: OverlayLayer,
 ): Promise<PostSetup> {
   const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
   const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
@@ -82,6 +96,21 @@ export async function createPostprocessing(
   const cloudLayer = createCloudPass(cloudTextures, camera.near, camera.far);
   composer.addPass(cloudLayer.pass);
 
+  if (overlay) {
+    overlay.setDepthTexture(depthTexture, camera.near, camera.far);
+    overlay.setSize(size.width, size.height, renderer.getPixelRatio());
+    const overlayPass = new Pass();
+    overlayPass.needsSwap = false;
+    overlayPass.render = (r, _writeBuffer, readBuffer) => {
+      const autoClear = r.autoClear;
+      r.autoClear = false;
+      r.setRenderTarget(readBuffer);
+      r.render(overlay.scene, camera);
+      r.autoClear = autoClear;
+    };
+    composer.addPass(overlayPass);
+  }
+
   const meterQuad = new FullScreenQuad();
   const meter = new LuminanceMeter(renderer, meterQuad);
   const meterPass = new Pass();
@@ -98,8 +127,10 @@ export async function createPostprocessing(
     fragmentShader: lensFrag,
     uniforms: {
       tDiffuse: { value: null },
+      tDepth: { value: depthTexture },
       uSunScreen: { value: sunScreen },
       uSunVisible: { value: 0 },
+      uAspect: { value: size.width / size.height },
       uFlareColor: { value: new THREE.Color(1.0, 0.82, 0.55) },
     },
     depthTest: false,
@@ -194,7 +225,7 @@ export async function createPostprocessing(
       const physicalEv100AtIso100 = ev100FromCamera(aperture, shutterSpeed, 100);
       ISO = Math.max(100.0, 100.0 * Math.pow(2, physicalEv100AtIso100 - ev));
     } else {
-      gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) * Math.pow(2, compensation));
+      gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
     }
 
     const sensorLight = (shutterSpeed / (aperture * aperture));
@@ -214,8 +245,9 @@ export async function createPostprocessing(
     const clip = sunWorld.clone().project(camera);
     const inFront = clip.z < 1.0 && clip.z > -1.0;
     sunScreen.set(clip.x * 0.5 + 0.5, clip.y * 0.5 + 0.5);
+    const edge = Math.max(Math.abs(clip.x), Math.abs(clip.y));
     lensMat.uniforms.uSunScreen.value = sunScreen;
-    lensMat.uniforms.uSunVisible.value = inFront ? 1 : 0;
+    lensMat.uniforms.uSunVisible.value = inFront ? 1 - smoothstep(1.0, 1.6, edge) : 0;
 
     composer.render();
   };
@@ -234,12 +266,15 @@ export async function createPostprocessing(
       blurH.uniforms.uDirection.value.set(1 / (width * dpr), 0);
       blurV.uniforms.uDirection.value.set(0, 1 / (height * dpr));
       gradePass.uniforms.uAspect.value = width / height;
+      lensMat.uniforms.uAspect.value = width / height;
+      overlay?.setSize(width * dpr, height * dpr, dpr);
     },
     exposureInfo() {
       return {
         exposure: gradePass.uniforms.uExposure.value as number,
         ev100: exposureState.ev100,
         luminance: meter.luminance,
+        iso: ISO,
       };
     },
     setShutterSpeed(s: number){
@@ -253,6 +288,9 @@ export async function createPostprocessing(
     },
     setAutoExposure(a: boolean){
       autoExposure = a;
+    },
+    setSSAO(enabled: boolean){
+      ssaoPass.enabled = enabled;
     },
     setParams(m) {
       fogLayer.setParams(m);

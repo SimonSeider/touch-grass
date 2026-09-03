@@ -4,405 +4,346 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="src/styles/ui.css" />
   <title>Touch Grass</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #0b100e;
-    }
-
-    canvas {
-      display: block;
-    }
-
-    #menu {
-      position: fixed;
-      inset: 0;
-      z-index: 30;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: radial-gradient(120% 90% at 50% 45%, rgba(0, 0, 0, 0.10), rgba(0, 0, 0, 0.34));
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-      transition: opacity 240ms ease, visibility 240ms;
-    }
-
-    #menu.open {
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-    }
-
-    #menu .panel {
-      position: relative;
-      width: min(400px, 90vw);
-      max-height: 86vh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      padding: 30px 30px 24px;
-      border-radius: 26px;
-      color: rgba(255, 255, 255, 0.92);
-      user-select: none;
-      background: rgba(12, 18, 16, 0.34);
-      -webkit-backdrop-filter: blur(34px) saturate(115%);
-      backdrop-filter: blur(34px) saturate(115%);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      box-shadow:
-        0 28px 70px rgba(0, 0, 0, 0.42),
-        inset 0 1px 0 rgba(255, 255, 255, 0.10);
-      transform: translateY(12px) scale(0.97);
-      transition: transform 320ms cubic-bezier(0.18, 0.9, 0.26, 1);
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-    }
-
-    #menu.open .panel {
-      transform: none;
-    }
-
-    #menu .panel::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    #menu .panel::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.14);
-      border-radius: 6px;
-    }
-
-    #menu .panel-label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 2.6px;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.42);
-      text-align: center;
-      margin-bottom: 26px;
-    }
-
-    #menu .group {
-      margin-bottom: 26px;
-    }
-
-    #menu .group:last-of-type {
-      margin-bottom: 20px;
-    }
-
-    #menu .group-title {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 1.8px;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.30);
-      margin-bottom: 14px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    }
-
-    #menu .row {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 18px;
-    }
-
-    #menu .row:last-child {
-      margin-bottom: 0;
-    }
-
-    #menu .row-toggle {
-      flex-direction: row;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    #menu .name {
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.2px;
-      color: rgba(255, 255, 255, 0.82);
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-    }
-
-    #menu .name small {
-      font-size: 12px;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-      color: rgba(255, 255, 255, 0.40);
-    }
-
-    #menu .manual {
-      transition: opacity 220ms ease;
-    }
-
-    #menu.auto-exposure .manual {
-      opacity: 0.32;
-      pointer-events: none;
-    }
-
-    #menu input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 4px;
-      border-radius: 4px;
-      background:
-        linear-gradient(to right,
-          rgba(255, 255, 255, 0.72) var(--fill, 50%),
-          rgba(255, 255, 255, 0.12) var(--fill, 50%));
-      outline: none;
-      cursor: pointer;
-    }
-
-    #menu input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 15px;
-      height: 15px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-      transition: transform 120ms ease;
-    }
-
-    #menu input[type="range"]:hover::-webkit-slider-thumb {
-      transform: scale(1.08);
-    }
-
-    #menu input[type="range"]:active::-webkit-slider-thumb {
-      transform: scale(1.18);
-    }
-
-    #menu input[type="range"]::-moz-range-thumb {
-      width: 15px;
-      height: 15px;
-      border: none;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-    }
-
-    #menu .switch {
-      position: relative;
-      display: inline-block;
-      width: 40px;
-      height: 22px;
-      flex: none;
-    }
-
-    #menu .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    #menu .track {
-      position: absolute;
-      cursor: pointer;
-      inset: 0;
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.12);
-      transition: background 200ms ease;
-    }
-
-    #menu .track::before {
-      position: absolute;
-      content: "";
-      height: 16px;
-      width: 16px;
-      left: 3px;
-      bottom: 3px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.92);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-      transition: transform 220ms cubic-bezier(0.18, 0.9, 0.26, 1);
-    }
-
-    #menu .switch input:checked+.track {
-      background: rgba(255, 255, 255, 0.42);
-    }
-
-    #menu .switch input:checked+.track::before {
-      transform: translateX(18px);
-    }
-
-    #menu .credit {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 10px;
-      font-size: 13px;
-    }
-
-    #menu .credit:last-child {
-      margin-bottom: 0;
-    }
-
-    #menu .credit a {
-      color: rgba(255, 255, 255, 0.82);
-      text-decoration: none;
-      font-weight: 500;
-      letter-spacing: 0.2px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-      transition: color 160ms ease, border-color 160ms ease;
-    }
-
-    #menu .credit a:hover {
-      color: #fff;
-      border-bottom-color: rgba(255, 255, 255, 0.45);
-    }
-
-    #menu .credit span {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.38);
-      text-align: right;
-    }
-
-    #menu .github {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      margin-bottom: 16px;
-      padding: 11px 16px;
-      border-radius: 14px;
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.3px;
-      text-decoration: none;
-      color: rgba(255, 255, 255, 0.88);
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
-    }
-
-    #menu .github:hover {
-      background: rgba(255, 255, 255, 0.13);
-      border-color: rgba(255, 255, 255, 0.20);
-      color: #fff;
-    }
-
-    #menu .github:active {
-      transform: scale(0.985);
-    }
-
-    #menu .github svg {
-      width: 15px;
-      height: 15px;
-      fill: currentColor;
-      flex: none;
-    }
-
-    #menu .github .star {
-      width: 13px;
-      height: 13px;
-      opacity: 0.55;
-      transition: opacity 180ms ease, transform 260ms cubic-bezier(0.18, 0.9, 0.26, 1);
-    }
-
-    #menu .github:hover .star {
-      opacity: 1;
-      transform: rotate(72deg);
-    }
-
-    #menu .hint {
-      font-size: 11px;
-      letter-spacing: 0.5px;
-      text-align: center;
-      color: rgba(255, 255, 255, 0.32);
-    }
-
-    #menu .hint kbd {
-      font: inherit;
-      padding: 2px 7px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.10);
-      color: rgba(255, 255, 255, 0.52);
-    }
-  </style>
 </head>
 
 <body>
+  <div id="hud">
+    <div class="hud-row"><span>FPS</span><b id="hudFps">0</b></div>
+    <div class="hud-row"><span>Frame</span><b id="hudFrame">0.0 ms</b></div>
+  </div>
+
   <div id="menu">
     <div class="panel">
-      <div class="panel-label">Paused</div>
+      <div class="panel-top">
+        <div class="panel-title">Settings</div>
+        <div class="panel-label">Paused</div>
+      </div>
 
-      <div class="group">
-        <div class="group-title">Camera</div>
-        <div class="row row-toggle">
-          <div class="name">Auto Exposure</div>
-          <label class="switch">
-            <input type="checkbox" id="AutoExposureToggle" checked>
-            <span class="track"></span>
-          </label>
-        </div>
-        <div class="manual">
-          <div class="row">
-            <div class="name">Shutter Speed <small id="shutterSpeed">1/125s</small></div>
-            <input type="range" id="shutterSpeedVal" min="2" max="1000" value="125">
-          </div>
-          <div class="row">
-            <div class="name">Aperture <small id="aperture">f/16</small></div>
-            <input type="range" id="apertureVal" min="1" max="32" step="1" value="16">
-          </div>
-          <div class="row">
-            <div class="name">ISO <small id="ISO">100</small></div>
-            <input type="range" id="ISOVal" min="50" max="8000" step="50" value="100">
-          </div>
+      <div class="panel-body">
+        <nav class="rail" id="menuRail">
+          <button class="tab active" type="button" data-tab="graphics">
+            <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i>
+            <span>Graphics</span>
+          </button>
+          <button class="tab" type="button" data-tab="camera">
+            <i class="fa-solid fa-camera" aria-hidden="true"></i>
+            <span>Camera</span>
+          </button>
+          <button class="tab" type="button" data-tab="gameplay">
+            <i class="fa-solid fa-gamepad" aria-hidden="true"></i>
+            <span>Gameplay</span>
+          </button>
+          <button class="tab" type="button" data-tab="audio">
+            <i class="fa-solid fa-volume-high" aria-hidden="true"></i>
+            <span>Audio</span>
+          </button>
+          <button class="tab" type="button" data-tab="debug">
+            <i class="fa-solid fa-bug" aria-hidden="true"></i>
+            <span>Debug</span>
+          </button>
+          <button class="tab" type="button" data-tab="about">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            <span>About</span>
+          </button>
+        </nav>
+
+        <div class="pages" id="menuPages">
+
+          <section class="page active" data-page="graphics">
+            <div class="group">
+              <div class="group-title">Quality</div>
+              <div class="row">
+                <div class="name">Preset <small id="presetOut">High</small></div>
+                <div class="seg" id="qualityPreset">
+                  <button type="button" data-value="low">Low</button>
+                  <button type="button" data-value="medium">Medium</button>
+                  <button type="button" data-value="high">High</button>
+                  <button type="button" data-value="ultra">Ultra</button>
+                </div>
+              </div>
+              <div class="row">
+                <div class="name">Resolution Scale <small></small></div>
+                <input type="range" data-setting="graphics.resolutionScale" data-format="x" min="0.5" max="2"
+                  step="0.05">
+              </div>
+              <div class="row">
+                <div class="name">View Distance <small></small></div>
+                <input type="range" data-setting="graphics.viewDistance" data-format="chunks" min="2" max="8" step="1">
+              </div>
+              <div class="row">
+                <div class="name">Grass Density <small></small></div>
+                <input type="range" data-setting="graphics.grassDensity" data-format="pctOfOne" min="0.3" max="1.5"
+                  step="0.05">
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Ambient Occlusion</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="graphics.ssao">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Pollen Particles</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="graphics.particles">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="note">Higher presets rebuild the grass chunks, which can stutter for a moment.</div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Atmosphere</div>
+              <div class="row">
+                <div class="name">Fog Density <small></small></div>
+                <input type="range" data-setting="graphics.fogDensity" data-format="f3" min="0" max="0.25" step="0.005">
+              </div>
+              <div class="row">
+                <div class="name">Haze <small></small></div>
+                <input type="range" data-setting="graphics.haze" data-format="f2" min="0" max="1.5" step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Cloud Coverage <small></small></div>
+                <input type="range" data-setting="graphics.cloudCoverage" data-format="pctOfOne" min="0.3" max="1"
+                  step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Cloud Density <small></small></div>
+                <input type="range" data-setting="graphics.cloudDensity" data-format="f2" min="0.2" max="4" step="0.05">
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Color Grading</div>
+              <div class="row">
+                <div class="name">Bloom <small></small></div>
+                <input type="range" data-setting="graphics.bloom" data-format="f2" min="0" max="1" step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Saturation <small></small></div>
+                <input type="range" data-setting="graphics.saturation" data-format="f2" min="0" max="2" step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Contrast <small></small></div>
+                <input type="range" data-setting="graphics.contrast" data-format="f2" min="0.5" max="1.8" step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Warmth <small></small></div>
+                <input type="range" data-setting="graphics.warmth" data-format="f2" min="-0.5" max="0.5" step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Vignette <small></small></div>
+                <input type="range" data-setting="graphics.vignette" data-format="f2" min="0" max="1" step="0.01">
+              </div>
+              <div class="row">
+                <div class="name">Chromatic Aberration <small></small></div>
+                <input type="range" data-setting="graphics.chroma" data-format="f4" min="0" max="0.02" step="0.0005">
+              </div>
+            </div>
+          </section>
+
+          <section class="page" data-page="camera">
+            <div class="group">
+              <div class="group-title">Lens</div>
+              <div class="row">
+                <div class="name">Field of View <small></small></div>
+                <input type="range" data-setting="camera.fov" data-format="deg" min="55" max="110" step="1">
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Exposure</div>
+              <div class="row row-toggle">
+                <div class="name">Auto Exposure</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="camera.autoExposure">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="row" data-enabled-by="camera.autoExposure">
+                <div class="name">Exposure Compensation <small></small></div>
+                <input type="range" data-setting="camera.exposureCompensation" data-format="ev" min="-3" max="3"
+                  step="0.1">
+              </div>
+              <div class="row" data-enabled-by="!camera.autoExposure">
+                <div class="name">Shutter Speed <small></small></div>
+                <input type="range" data-setting="camera.shutterDenominator" data-format="shutter" min="2" max="1000"
+                  step="1">
+              </div>
+              <div class="row" data-enabled-by="!camera.autoExposure">
+                <div class="name">Aperture <small></small></div>
+                <input type="range" data-setting="camera.aperture" data-format="fstop" min="1" max="32" step="1">
+              </div>
+              <div class="row" data-enabled-by="!camera.autoExposure">
+                <div class="name">ISO <small></small></div>
+                <input type="range" data-setting="camera.iso" data-format="int" min="50" max="8000" step="50">
+              </div>
+              <div class="note">With auto exposure on, ISO floats to meter the scene and the shutter and aperture only
+                shape sensor noise.</div>
+            </div>
+          </section>
+
+          <section class="page" data-page="gameplay">
+            <div class="group">
+              <div class="group-title">Look</div>
+              <div class="row">
+                <div class="name">Mouse Sensitivity <small></small></div>
+                <input type="range" data-setting="gameplay.sensitivity" data-format="x" min="0.2" max="3" step="0.05">
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Invert Y Axis</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="gameplay.invertY">
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Movement</div>
+              <div class="row">
+                <div class="name">Walk Speed <small></small></div>
+                <input type="range" data-setting="gameplay.walkSpeed" data-format="speed" min="1" max="10" step="0.1">
+              </div>
+              <div class="row">
+                <div class="name">Sprint Speed <small></small></div>
+                <input type="range" data-setting="gameplay.runSpeed" data-format="speed" min="2" max="16" step="0.1">
+              </div>
+              <div class="row">
+                <div class="name">Jump Height <small></small></div>
+                <input type="range" data-setting="gameplay.jumpHeight" data-format="meters" min="0.4" max="4"
+                  step="0.05">
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Toggle Sprint</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="gameplay.sprintToggle">
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Controls</div>
+              <div class="readout"><span>Move</span><b>W A S D</b></div>
+              <div class="readout"><span>Sprint</span><b>Shift</b></div>
+              <div class="readout"><span>Jump</span><b>Space</b></div>
+              <div class="readout"><span>Crouch</span><b>Ctrl</b></div>
+              <div class="readout"><span>Pause</span><b>Esc</b></div>
+            </div>
+          </section>
+
+          <section class="page" data-page="audio">
+            <div class="group">
+              <div class="group-title">Volume</div>
+              <div class="row">
+                <div class="name">Master <small></small></div>
+                <input type="range" data-setting="audio.master" data-format="pct" min="0" max="100" step="1">
+              </div>
+              <div class="row">
+                <div class="name">Music <small></small></div>
+                <input type="range" data-setting="audio.music" data-format="pct" min="0" max="100" step="1">
+              </div>
+              <div class="row">
+                <div class="name">Sound Effects <small></small></div>
+                <input type="range" data-setting="audio.sfx" data-format="pct" min="0" max="100" step="1">
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Behaviour</div>
+              <div class="row row-toggle">
+                <div class="name">Mute When Unfocused</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="audio.muteUnfocused">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="note">Audio starts on your first click or key press. Browsers block it before that.</div>
+            </div>
+          </section>
+
+          <section class="page" data-page="debug">
+            <div class="group">
+              <div class="group-title">Overlay</div>
+              <div class="row row-toggle">
+                <div class="name">Performance HUD</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="debug.hud">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Wireframe</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="debug.wireframe">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Blur While Paused</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="debug.pauseBlur">
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Sun</div>
+              <div class="row row-toggle">
+                <div class="name">Freeze Time Of Day</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="debug.freezeSun">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="row" data-enabled-by="debug.freezeSun">
+                <div class="name">Sun Elevation <small></small></div>
+                <input type="range" data-setting="debug.sunElevation" data-format="rad" min="-0.2" max="1.5"
+                  step="0.01">
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Reset</div>
+              <div class="actions">
+                <button class="btn" type="button" id="resetGraphics">Reset Graphics</button>
+                <button class="btn danger" type="button" id="resetAll">Reset Everything</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="page" data-page="about">
+            <div class="group">
+              <div class="group-title">Credits</div>
+              <div class="credit">
+                <a href="https://github.com/SimonSeider" target="_blank" rel="noopener noreferrer">SimonSeider</a>
+                <span>Creator</span>
+              </div>
+              <div class="credit">
+                <a href="https://github.com/f1nel-egy" target="_blank" rel="noopener noreferrer">f1nel-egy</a>
+                <span>Co-Creator</span>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-title">Project</div>
+              <a class="github" href="https://github.com/SimonSeider/touch-grass" target="_blank"
+                rel="noopener noreferrer">
+                <i class="fa-brands fa-github" aria-hidden="true"></i>
+                <span>Star on GitHub</span>
+                <i class="star fa-solid fa-star" aria-hidden="true"></i>
+              </a>
+            </div>
+          </section>
+
         </div>
       </div>
 
-      <div class="group">
-        <div class="group-title">Audio</div>
-        <div class="row">
-          <div class="name">Music <small id="musicPct">50%</small></div>
-          <input type="range" id="musicVol" min="0" max="100" value="50">
-        </div>
-        <div class="row">
-          <div class="name">Sound Effects <small id="sfxPct">50%</small></div>
-          <input type="range" id="sfxVol" min="0" max="100" value="50">
-        </div>
-      </div>
-
-      <div class="group">
-        <div class="group-title">Credits</div>
-        <div class="credit">
-          <a href="https://github.com/SimonSeider" target="_blank" rel="noopener noreferrer">SimonSeider</a>
-          <span>Creator</span>
-        </div>
-        <div class="credit">
-          <a href="https://github.com/f1nel-egy" target="_blank" rel="noopener noreferrer">f1nel-egy</a>
-          <span>Camera &amp; exposure</span>
-        </div>
-      </div>
-
-      <a class="github" href="https://github.com/SimonSeider/touch-grass" target="_blank" rel="noopener noreferrer">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-        </svg>
-        <span>Star on GitHub</span>
-        <svg class="star" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z" />
-        </svg>
-      </a>
-
-      <div class="hint">Press <kbd>Esc</kbd> to resume</div>
+      <div class="panel-foot">Press <kbd>Esc</kbd> to resume</div>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

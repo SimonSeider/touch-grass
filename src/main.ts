@@ -9,6 +9,8 @@ import { createPostprocessing, type PostSetup } from './postprocessing';
 import { sunTint, sunEnergy } from './skymath';
 import { createSkyProbe, iblUniforms } from './skyprobe';
 import { RENDER_PARAMS } from './rendermode';
+import { createUi } from './ui';
+import type { Settings } from './settings';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -42,8 +44,8 @@ const grassLayer = createGrass(terrainLayer.heightAt, terrainLayer.shadowUniform
 scene.add(grassLayer.group);
 grassLayer.material.light = sun;
 
+// Composited by its own pass after fog and clouds, so it stays out of the main scene.
 const particles = createParticles();
-scene.add(particles.points);
 
 const player = createPlayer(camera, terrainLayer.heightAt);
 
@@ -64,14 +66,18 @@ function applyRenderParams() {
   const g = grassLayer.material.uniforms;
   g.uSunRadiance.value = m.grassSunRadiance;
 
+  particles.setRadiance(m.sunRadiance);
+
   sky.setHaze(m.haze);
   post?.setParams(m);
 }
 
 async function initPost() {
-  post = await createPostprocessing(renderer, scene, camera, cloudCfg, terrainLayer.shadowUniforms);
+  post = await createPostprocessing(renderer, scene, camera, cloudCfg, terrainLayer.shadowUniforms, particles);
 
   post.setParams(RENDER_PARAMS);
+  post.setSize(window.innerWidth, window.innerHeight);
+  applySettings(ui.settings);
 }
 
 function renderDirect() {
@@ -91,153 +97,96 @@ function startAudioOnce() {
 window.addEventListener('pointerdown', startAudioOnce);
 window.addEventListener('keydown', startAudioOnce);
 
-const menuEl = document.getElementById('menu') as HTMLDivElement;
-const musicSlider = document.getElementById('musicVol') as HTMLInputElement;
-const sfxSlider = document.getElementById('sfxVol') as HTMLInputElement;
-const musicPct = document.getElementById('musicPct') as HTMLElement;
-const sfxPct = document.getElementById('sfxPct') as HTMLElement;
-
-const shutterSpeedSlider = document.getElementById('shutterSpeedVal') as HTMLInputElement;
-const apertureSlider = document.getElementById('apertureVal') as HTMLInputElement;
-const ISOSlider = document.getElementById('ISOVal') as HTMLInputElement;
-const shutterSpeedPct = document.getElementById('shutterSpeed') as HTMLElement;
-const aperturePct = document.getElementById('aperture') as HTMLElement;
-const ISOPct = document.getElementById('ISO') as HTMLElement;
-
-const autoExposureToggle = document.getElementById('AutoExposureToggle') as HTMLInputElement;
-
-let menuOpen = false;
-
 let menuBlur = 0;
 
-function setMenu(open: boolean) {
-  menuOpen = open;
-  player.setPaused(open);
-  menuEl.classList.toggle('open', open);
-  if (open) {
-    if (document.pointerLockElement) document.exitPointerLock();
-  } else {
-    player.lock();
+let pixelRatio = -1;
+
+function applyResolutionScale(scale: number) {
+  const next = Math.min(window.devicePixelRatio, 2) * scale;
+  if (Math.abs(next - pixelRatio) < 1e-3) return;
+  pixelRatio = next;
+  renderer.setPixelRatio(next);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  post?.setSize(window.innerWidth, window.innerHeight);
+}
+
+function applySettings(s: Settings) {
+  const g = s.graphics;
+  applyResolutionScale(g.resolutionScale);
+  grassLayer.setViewDistance(g.viewDistance);
+  grassLayer.setDensity(g.grassDensity);
+  grassLayer.setWireframe(s.debug.wireframe);
+  terrainLayer.material.wireframe = s.debug.wireframe;
+  particles.points.visible = g.particles;
+
+  RENDER_PARAMS.bloom = g.bloom;
+  RENDER_PARAMS.fogDensity = g.fogDensity;
+  RENDER_PARAMS.haze = g.haze;
+  RENDER_PARAMS.cloudCoverageLow = g.cloudCoverage;
+  RENDER_PARAMS.cloudCoverageHigh = Math.min(1, g.cloudCoverage + 0.2);
+  RENDER_PARAMS.cloudDensity = g.cloudDensity;
+  RENDER_PARAMS.saturation = g.saturation;
+  RENDER_PARAMS.contrast = g.contrast;
+  RENDER_PARAMS.warmth = g.warmth;
+  RENDER_PARAMS.vignette = g.vignette;
+  RENDER_PARAMS.chroma = g.chroma;
+  RENDER_PARAMS.autoExposure = s.camera.autoExposure;
+  RENDER_PARAMS.exposureCompensation = s.camera.exposureCompensation;
+  applyRenderParams();
+
+  if (camera.fov !== s.camera.fov) {
+    camera.fov = s.camera.fov;
+    camera.updateProjectionMatrix();
   }
+
+  post?.setSSAO(g.ssao);
+  post?.setShutterSpeed(1 / s.camera.shutterDenominator);
+  post?.setAperture(s.camera.aperture);
+  if (!s.camera.autoExposure) post?.setISO(s.camera.iso);
+
+  player.setTuning(s.gameplay);
+
+  audio.setMasterVolume(s.audio.master / 100);
+  audio.setMusicVolume(s.audio.music / 100);
+  audio.setSfxVolume(s.audio.sfx / 100);
+  audio.setMuted(s.audio.muteUnfocused && !document.hasFocus());
 }
 
-function updateSliderFill(el: HTMLInputElement) {
-  const min = Number(el.min || 0);
-  const max = Number(el.max || 100);
-  const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0;
-  el.style.setProperty('--fill', pct.toFixed(2) + '%');
-}
-
-// I'm sorry Simon
-/*function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void) {
-  const update = () => {
-    const v = Number(el.value) / 100;
-    label.textContent = Math.round(v * 100) + '%';
-    updateSliderFill(el);
-    apply(v);
-  };
-  el.addEventListener('input', update);
-  el.addEventListener('change', update);
-  update();
-}*/
-
-interface SliderOptions {
-  transform?: (raw: number) => number;
-  format?: (val: number, raw: number) => string;
-}
-
-function bindSlider(el: HTMLInputElement, label: HTMLElement, apply: (v: number) => void, options: SliderOptions = {}){
-  const {
-    transform = (raw) => raw,
-    format = (v) => `${v}`,
-  } = options;
-
-  const update = () => {
-    const raw = Number(el.value);
-    const val = transform(raw);
-    label.textContent = format(val, raw);
-    updateSliderFill(el);
-    apply(val);
-  };
-
-  el.addEventListener('input', update);
-  update();
-}
-
-function bindToggle(el: HTMLInputElement, apply: (v: boolean) => void){
-  const update = () => {
-    apply(el.checked);
-  };
-
-  el.addEventListener('change', update);
-  update();
-}
-
-bindSlider(musicSlider, musicPct, (v) => audio.setMusicVolume(v), {
-  transform: (raw) => raw / 100,
-  format: (_, raw) => `${Math.round(raw)}%`,
+const ui = createUi({
+  apply: applySettings,
+  onOpenChange: (open) => {
+    player.setPaused(open);
+    if (open) {
+      if (document.pointerLockElement) document.exitPointerLock();
+    } else {
+      player.lock();
+    }
+  },
 });
-
-bindSlider(sfxSlider, sfxPct, (v) => audio.setSfxVolume(v), {
-  transform: (raw) => raw / 100,
-  format: (_, raw) => `${Math.round(raw)}%`,
-});
-
-audio.setMusicVolume(0.5);
-audio.setSfxVolume(0.5);
-
-bindSlider(shutterSpeedSlider, shutterSpeedPct,
-  (s) => {
-    if(post !== null)
-        post.setShutterSpeed(s);
-  },
-  {
-    transform: (raw) => 1 / raw,
-    format: (_, raw) => (raw >= 1 ? `1/${raw}s` : `${(1 / raw).toFixed(1)}s`),
-  });
-
-bindSlider(apertureSlider, aperturePct,
-  (a) => {
-    if(post !== null)
-        post.setAperture(a);
-  },
-  {
-    transform: (raw) => raw,
-    format: (val) => `f/${val.toFixed(1)}`,
-  });
-
-bindSlider(ISOSlider, ISOPct,
-  (i) => {
-    if(post !== null)
-        post.setISO(i);
-  },
-  {
-    transform: (raw) => raw,
-    format: (val) => `${val}`,
-  });
-
-bindToggle(autoExposureToggle,
-  (c) => {
-    menuEl.classList.toggle('auto-exposure', c);
-    if(post !== null)
-        post.setAutoExposure(c);
-  })
+const settings = ui.settings;
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     e.preventDefault();
-    setMenu(!menuOpen);
+    ui.toggle();
   }
 });
+
+function updateFocusMute() {
+  audio.setMuted(settings.audio.muteUnfocused && !document.hasFocus());
+}
+window.addEventListener('blur', updateFocusMute);
+window.addEventListener('focus', updateFocusMute);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  if (post) post.setSize(window.innerWidth, window.innerHeight);
+  pixelRatio = -1;
+  applyResolutionScale(settings.graphics.resolutionScale);
 });
 
 const clock = new THREE.Clock();
+let sunTime = 0;
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -245,9 +194,13 @@ function animate() {
 
   player.update(dt);
   audio.update(dt, player.isWalking());
+  ui.tick(dt);
 
-  const az = t * SUN_SPEED;
-  const el = 0.15 + (0.5 + 0.5 * Math.sin(t * SUN_SPEED * 1.4)) * 0.35;
+  if (!settings.debug.freezeSun) sunTime += dt;
+  const az = sunTime * SUN_SPEED;
+  const el = settings.debug.freezeSun
+    ? settings.debug.sunElevation
+    : 0.15 + (0.5 + 0.5 * Math.sin(sunTime * SUN_SPEED * 1.4)) * 0.35;
   sunDir.set(Math.cos(az), Math.sin(el), Math.sin(az) * 0.85).normalize();
   sun.position.copy(sunDir).multiplyScalar(SUN_DIST);
   sun.target.position.set(0, 0, 0);
@@ -266,7 +219,7 @@ function animate() {
   terrainLayer.update(camera.position);
   particles.update(t, camera.position, sunDir, sunColor);
 
-  const blurTarget = menuOpen ? 1 : 0;
+  const blurTarget = ui.isOpen() && settings.debug.pauseBlur ? 1 : 0;
   if (menuBlur !== blurTarget) {
 
     const k = 1 - Math.exp(-dt / 0.09);
