@@ -18,7 +18,6 @@ renderer.toneMapping = THREE.NoToneMapping;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfe3d2, 260, 1500);
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
 const SUN_DIST = 500;
@@ -50,7 +49,7 @@ const player = createPlayer(camera, terrainLayer.heightAt);
 
 const audio = createAudio();
 
-const cloudCfg = { sunDir, sunColor: sunColor.clone() };
+const cloudCfg = { sunDir, sunColor: sunColor.clone(), sunEnergy: 1 };
 let post: PostSetup | null = null;
 
 function applyRenderParams() {
@@ -61,18 +60,16 @@ function applyRenderParams() {
   const t = terrainLayer.material.uniforms;
   t.uSunRadiance.value = m.sunRadiance;
   t.uRim.value = m.rim;
-  t.uFogDensity.value = m.fogDensity;
 
   const g = grassLayer.material.uniforms;
   g.uSunRadiance.value = m.grassSunRadiance;
-  g.uFogDensity.value = m.fogDensity;
 
   sky.setHaze(m.haze);
   post?.setParams(m);
 }
 
 async function initPost() {
-  post = await createPostprocessing(renderer, scene, camera, cloudCfg);
+  post = await createPostprocessing(renderer, scene, camera, cloudCfg, terrainLayer.shadowUniforms);
 
   post.setParams(RENDER_PARAMS);
 }
@@ -260,6 +257,7 @@ function animate() {
 
   sun.intensity = sunEnergy(sunDir.y);
   cloudCfg.sunColor.copy(sunColor);
+  cloudCfg.sunEnergy = sun.intensity;
 
   sky.update(dt, t, camera.position, sunDir);
 

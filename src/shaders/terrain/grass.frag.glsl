@@ -6,7 +6,6 @@ uniform vec3 uSunColor;
 uniform float uSunEnergy;
 
 uniform float uSunRadiance;
-uniform float uFogDensity;
 uniform float uTranslucentGain;
 uniform float uGrassMaskThreshold;
 
@@ -92,8 +91,6 @@ void main() {
 
   float spec = lightSpec(n, v, l, 0.36) * shadow * lightSat(dot(n, l) + 0.15);
   col += sunLight * spec * 0.055 * smoothstep(0.2, 1.0, vHeight);
-
-  col = skyApplyAerial(col, -v, uSunDir, dist, uFogDensity);
 
   gl_FragColor = vec4(col, 1.0);
 }

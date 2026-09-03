@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createCloudPass, createCloudTextures } from './clouds';
+import { createVolumetricFog } from './volumetricfog';
 import postGradeVert from './shaders/postprocessing/post_grade.vert.glsl?raw';
 import postGradeFrag from './shaders/postprocessing/post_grade.frag.glsl?raw';
 import lensVert from './shaders/postprocessing/lensflare.vert.glsl?raw';
@@ -16,6 +17,7 @@ import {
   type ExposureState,
 } from './exposure';
 import type { RenderParams } from './rendermode';
+import type { ShadowFieldUniforms } from './terrain';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 export interface PostSetup {
@@ -39,7 +41,8 @@ export async function createPostprocessing(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
-  cloudCfg: { sunDir: THREE.Vector3; sunColor: THREE.Color },
+  cloudCfg: { sunDir: THREE.Vector3; sunColor: THREE.Color; sunEnergy: number },
+  shadowUniforms: ShadowFieldUniforms,
 ): Promise<PostSetup> {
   const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
   const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
@@ -73,6 +76,9 @@ export async function createPostprocessing(
   ssaoPass.minDistance = 0.002;
   ssaoPass.maxDistance = 0.03;
   composer.addPass(ssaoPass);
+
+  const fogLayer = createVolumetricFog(ShaderPass, shadowUniforms);
+  composer.addPass(fogLayer.pass);
 
   const cloudLayer = createCloudPass(cloudTextures, camera.near, camera.far);
   composer.addPass(cloudLayer.pass);
@@ -176,6 +182,7 @@ export async function createPostprocessing(
 
   const render = (time: number, dt: number) => {
     cloudLayer.setTime(time);
+    fogLayer.setTime(time);
     gradePass.uniforms.uTime.value = time;
 
     if (autoExposure) {
@@ -199,6 +206,7 @@ export async function createPostprocessing(
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
     cloudLayer.update(camera, camera.position, cloudCfg.sunDir, cloudCfg.sunColor, depthTexture);
+    fogLayer.update(camera, camera.position, cloudCfg.sunDir, cloudCfg.sunColor, cloudCfg.sunEnergy, depthTexture);
 
     const sunWorld = camera.position.clone().addScaledVector(cloudCfg.sunDir, 3000);
     camera.updateMatrixWorld();
@@ -246,6 +254,7 @@ export async function createPostprocessing(
       autoExposure = a;
     },
     setParams(m) {
+      fogLayer.setParams(m);
       bloomPass.strength = m.bloom;
       autoExposure = m.autoExposure;
       manualExposure = m.exposure;
@@ -255,7 +264,7 @@ export async function createPostprocessing(
       g.uContrast.value = m.contrast;
       g.uWarmth.value = m.warmth;
       g.uVignette.value = m.vignette;
-      g.uGrain.value = m.grain;
+      //g.uGrain.value = m.grain;
       g.uChroma.value = m.chroma;
       const c = cloudLayer.pass.material.uniforms;
       c.uCoverageLow.value = m.cloudCoverageLow;
@@ -282,6 +291,7 @@ export async function createPostprocessing(
       composer.dispose();
       depthTarget.dispose();
       cloudLayer.dispose();
+      fogLayer.dispose();
       meter.dispose();
       meterQuad.dispose();
     },

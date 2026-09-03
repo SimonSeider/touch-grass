@@ -141,7 +141,6 @@ export function createTerrain(): TerrainLayer {
 
       uSunRadiance: { value: 3.0 },
       uRim: { value: 0.30 },
-      uFogDensity: { value: 0.0016 },
 
       ...iblUniforms,
       ...shadowUniforms,

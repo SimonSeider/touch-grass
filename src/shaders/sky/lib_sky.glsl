@@ -71,12 +71,3 @@ vec3 skyFogColor(vec3 viewDir, vec3 sunDir) {
   vec3 flat_ = normalize(vec3(d.x, max(d.y, 0.0) * 0.30 + 0.035, d.z));
   return skyRadiance(flat_, sunDir, 1.0);
 }
-
-vec3 skyApplyAerial(vec3 color, vec3 viewDir, vec3 sunDir, float dist, float density) {
-  vec3 d = normalize(viewDir);
-  float f = 1.0 - exp(-dist * density);
-  vec3 fogCol = skyFogColor(d, sunDir);
-  float c = dot(d, normalize(sunDir));
-  vec3 inscatter = skySunTint(sunDir.y) * skyHG(c, 0.62) * skySunEnergy(sunDir.y);
-  return mix(color, fogCol + inscatter * f * 0.55, f);
-}

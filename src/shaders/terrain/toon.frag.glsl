@@ -6,7 +6,6 @@ uniform vec3 uSunColor;
 uniform float uSunEnergy;
 
 uniform float uSunRadiance;
-uniform float uFogDensity;
 uniform float uRim;
 
 uniform vec3 uSH[9];
@@ -93,8 +92,6 @@ void main() {
 
   float fres = lightFresnel(n, v, 0.03);
   col += skyAmb * fres * uRim * ao;
-
-  col = skyApplyAerial(col, -v, uSunDir, dist, uFogDensity);
 
   gl_FragColor = vec4(col, 1.0);
 }

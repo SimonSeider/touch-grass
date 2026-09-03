@@ -102,7 +102,6 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
       uSunColor: { value: new THREE.Color(1.0, 0.97, 0.92) },
       uSunEnergy: { value: 1.0 },
       uSunRadiance: { value: 2.8 },
-      uFogDensity: { value: 0.0016 },
 
       uTranslucentGain: { value: 0.55 },
 

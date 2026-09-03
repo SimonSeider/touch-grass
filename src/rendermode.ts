@@ -7,6 +7,16 @@ export interface RenderParams {
   grassSunRadiance: number;
   rim: number;
   fogDensity: number;
+  fogHeightFalloff: number;
+  fogBaseHeight: number;
+  fogFloor: number;
+  fogStart: number;
+  fogFade: number;
+  fogScatter: number;
+  fogAmbient: number;
+  fogAnisotropy: number;
+  fogNoise: number;
+  fogMaxDistance: number;
 
   haze: number;
 
@@ -33,7 +43,17 @@ export const RENDER_PARAMS: RenderParams = {
   sunRadiance: 3.0,
   grassSunRadiance: 2.8,
   rim: 0.3,
-  fogDensity: 0.0016,
+  fogDensity: 0.075,
+  fogHeightFalloff: 0.045,
+  fogBaseHeight: -6.0,
+  fogFloor: 0.014,
+  fogStart: 20.0,
+  fogFade: 40.0,
+  fogScatter: 2.2,
+  fogAmbient: 1.0,
+  fogAnisotropy: 0.6,
+  fogNoise: 0.35,
+  fogMaxDistance: 600.0,
 
   haze: 0.65,
 
