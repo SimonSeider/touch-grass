@@ -2,6 +2,20 @@
 @import '@fortawesome/fontawesome-free/css/solid.css';
 @import '@fortawesome/fontawesome-free/css/brands.css';
 
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #a8d8c8;
+}
+
+canvas {
+  display: block;
+}
+
 #menu {
   position: fixed;
   inset: 0;
