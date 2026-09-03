@@ -18,7 +18,6 @@ import {
 } from './exposure';
 import type { RenderParams } from './rendermode';
 import type { ShadowFieldUniforms } from './terrain';
-import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 export interface PostSetup {
   render: (time: number, dt: number) => void;
@@ -148,13 +147,15 @@ export async function createPostprocessing(
     glslVersion: THREE.GLSL3,
     uniforms: {
       tDiffuse: { value: null },
+      tDepth: { value: depthTexture },
+      uNear: { value: camera.near },
+      uFar: { value: camera.far },
       uTime: { value: 0 },
       uExposure: { value: 0.26 },
       uVignette: { value: 0.30 },
       uContrast: { value: 1.06 },
       uSaturation: { value: 1.06 },
       uWarmth: { value: 0.10 },
-      //uGrain: { value: 0.022 },
       uChroma: { value: 0.0035 },
       uAspect: { value: size.width / size.height },
 
