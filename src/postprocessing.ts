@@ -346,7 +346,7 @@ export async function createPostprocessing(
     const sensorLight = (shutterSpeed / (aperture * aperture));
     const ISOGain = ISO / 100.0;
 
-    gradePass.uniforms.uReadNoise.value = 0.00003 * ISOGain; 
+    gradePass.uniforms.uReadNoise.value = 0.00007 * ISOGain; 
     gradePass.uniforms.uShotNoise.value = 0.00003 * Math.sqrt(ISOGain / Math.max(sensorLight, 0.001));
 
     gradePass.uniforms.uFOV.value = FOV;

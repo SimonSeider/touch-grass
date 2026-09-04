@@ -161,7 +161,6 @@ void main() {
   col *= 1.0 - uVignette * smoothstep(0.55, 1.15, r);
 
   col = ACESFilm(max(col, 0.0));
-  col = pow(col, vec3(1.0 / 2.2));
 
   outColor = vec4(clamp(linearToSRGB(col), 0.0, 1.0), 1.0);
 }
