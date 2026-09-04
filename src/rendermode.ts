@@ -1,6 +1,7 @@
 export interface RenderParams {
   exposure: number;
   autoExposure: boolean;
+  autoISO: boolean;
   exposureCompensation: number;
 
   sunRadiance: number;
@@ -38,6 +39,7 @@ export interface RenderParams {
 export const RENDER_PARAMS: RenderParams = {
   exposure: 0.26,
   autoExposure: true,
+  autoISO: false,
   exposureCompensation: 0.0,
 
   sunRadiance: 3.0,

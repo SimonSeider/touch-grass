@@ -59,6 +59,22 @@ function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
+function evalCondition(rawExpr: string, settings: Settings): boolean {
+  return rawExpr.split('||').some((orClause) => {
+    return orClause.split('&&').every((term) => {
+      const trimmed = term.trim();
+      if(!trimmed)
+          return true;
+
+      const negated = trimmed.startsWith('!');
+      const path = negated ? trimmed.slice(1).trim() : trimmed;
+      const val = Boolean(readPath(settings, path));
+
+      return negated ? !val : val;
+    });
+  });
+}
+
 export function createUi(options: UiOptions): Ui {
   const settings = loadSettings();
 
@@ -116,7 +132,7 @@ export function createUi(options: UiOptions): Ui {
   }
 
   // Rows that only make sense while another setting is on, e.g. manual exposure.
-  const gatedRows = Array.from(menuEl.querySelectorAll<HTMLElement>('[data-enabled-by]'));
+  /*const gatedRows = Array.from(menuEl.querySelectorAll<HTMLElement>('[data-enabled-by]'));
   for (const row of gatedRows) {
     const raw = row.dataset.enabledBy as string;
     const negated = raw.startsWith('!');
@@ -125,6 +141,15 @@ export function createUi(options: UiOptions): Ui {
       const on = Boolean(readPath(settings, path)) !== negated;
       row.classList.toggle('dimmed', !on);
     });
+  }*/
+  
+  const gatedRows = Array.from(menuEl.querySelectorAll<HTMLElement>('[data-enabled-by]'));
+  for(const row of gatedRows){
+      const raw = row.dataset.enabledBy as string;
+      syncers.push(() => {
+          const on = evalCondition(raw, settings);
+          row.classList.toggle('dimmed', !on);
+      });
   }
 
   const presetSeg = el<HTMLDivElement>('qualityPreset');

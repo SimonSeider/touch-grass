@@ -23,6 +23,7 @@ export interface CameraSettings {
   fov: number;
   focusDistance: number;
   autoExposure: boolean;
+  autoISO: boolean;
   autoFocus: boolean;
   exposureCompensation: number;
   shutterDenominator: number;
@@ -87,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fov: 72,
     focusDistance: 50,
     autoExposure: true,
+    autoISO: false,
     autoFocus: true,
     exposureCompensation: 0,
     shutterDenominator: 125,

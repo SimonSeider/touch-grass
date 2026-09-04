@@ -43,6 +43,7 @@ export interface PostSetup {
   setAperture: (a: number) => void;
   setISO: (i: number) => void;
   setAutoExposure: (a: boolean) => void;
+  setAutoISO: (a: boolean) => void;
   setAutoFocus: (a: boolean) => void;
   setFocusDistance: (f: number) => void;
   setFOV: (f: number) => void;
@@ -239,13 +240,29 @@ export async function createPostprocessing(
   const FOCUS_PULL_SPEED = 3.0;
   const focusPixelBuffer = new Float32Array(4);
 
+  const APERTURE_PULL_SPEED = 2.0;
+  const SHUTTER_PULL_SPEED  = 2.0;
+  
+  const ISO_BRIGHTEN_SPEED  = 1.5;
+  const ISO_DARKEN_SPEED    = 3.0;
+
   let focusReadTimer = 0;
   let currentFocusDistance = 50;
   let targetFocusDistance = 50;
+
+  let currentAperture = 16;
+  let targetAperture = 16;
+
+  let currentShutterSpeed = 0.008;
+  let targetShutterSpeed = 0.008;
+
+  let currentISO = 100;
+  let targetISO = 100;
   
   let focusDistance = 50;
 
   let autoExposure = true;
+  let autoISO = true;
   let autoFocus = true;
   let manualExposure = 0.26;
   let compensation = 0;
@@ -270,23 +287,59 @@ export async function createPostprocessing(
       return focusPixelBuffer[0];
   }
 
-  function updateAutoFocus(dt: number) {
-    const t = 1 - Math.exp(-FOCUS_PULL_SPEED * dt);
-    currentFocusDistance += (targetFocusDistance - currentFocusDistance) * t;
-  }
+  function adaptValue(current: number, target: number, dt: number, brightenSpeed: number, darkenSpeed: number): number {
+    const speed = target > current ? brightenSpeed : darkenSpeed;
+
+    const alpha = 1.0 - Math.exp(-speed * dt);
+
+    return current + (target - current) * alpha;
+  } 
 
   const render = (time: number, dt: number) => {
     cloudLayer.setTime(time);
     fogLayer.setTime(time);
     gradePass.uniforms.uTime.value = time;
-
+    
     if (autoExposure) {
       const targetEv = ev100FromLuminance(meter.luminance * NITS_PER_SCENE_UNIT) - compensation;
-      const requiredIso = 100.0 * Math.pow(2, ev100FromCamera(aperture, shutterSpeed, 100) - adaptEv100(exposureState, targetEv, Math.min(dt, 0.1)));
+      const ev = adaptEv100(exposureState, targetEv, Math.min(dt, 0.1)); // this already smooths EV, keep it
 
-      ISO = Math.max(50.0, Math.min(12800.0, requiredIso));
+      const evRatio = Math.pow(2, ev);
+
+      targetAperture = Math.max(1.4, Math.min(16.0, Math.sqrt(Math.pow(2, ev * 0.5))));
+
+      let targetShutter = (targetAperture * targetAperture) / evRatio;
+      const minShutter = 1 / 8000;
+      const maxShutter = 30.0;
+      targetShutter = Math.max(minShutter, Math.min(maxShutter, targetShutter));
+      targetShutterSpeed = targetShutter;
+
+      const physicalEv100 = ev100FromCamera(targetAperture, targetShutter, 100);
+      targetISO = physicalEv100 < ev ? Math.max(100.0, 100.0 * Math.pow(2, physicalEv100 - ev)) : 50.0;
+
+      const clampedDt = Math.min(0.1, dt);
+      currentAperture = adaptValue(currentAperture, targetAperture, clampedDt, APERTURE_PULL_SPEED, APERTURE_PULL_SPEED);
+      currentShutterSpeed = adaptValue(currentShutterSpeed, targetShutterSpeed, clampedDt, SHUTTER_PULL_SPEED, SHUTTER_PULL_SPEED);
+      currentISO = adaptValue(currentISO, targetISO, clampedDt, ISO_BRIGHTEN_SPEED, ISO_DARKEN_SPEED);
+
+      aperture = currentAperture;
+      shutterSpeed = currentShutterSpeed;
+      ISO = currentISO;
+
       gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
-    } else {
+    }
+    else if (autoISO) {
+      const targetEv = ev100FromLuminance(meter.luminance * NITS_PER_SCENE_UNIT) - compensation;
+      const ev = adaptEv100(exposureState, targetEv, Math.min(dt, 0.1));
+
+      targetISO = Math.max(50.0, Math.min(12800.0, 100.0 * Math.pow(2, ev100FromCamera(aperture, shutterSpeed, 100) - ev) ));
+
+      currentISO = adaptValue(currentISO, targetISO, Math.min(0.1, dt), ISO_BRIGHTEN_SPEED, ISO_DARKEN_SPEED);
+      ISO = currentISO;
+
+      gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
+    }
+    else {
       gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
     }
 
@@ -307,7 +360,7 @@ export async function createPostprocessing(
         const rawDepth = sampleDepthAtCenter();
         targetFocusDistance = linearizeDepth(rawDepth, camera.near, camera.far);
       }
-      updateAutoFocus(dt);
+      currentFocusDistance = adaptValue(currentFocusDistance, targetFocusDistance, Math.min(0.1, dt), FOCUS_PULL_SPEED, FOCUS_PULL_SPEED);
       gradePass.uniforms.uFocusDistance.value = currentFocusDistance;
     } else {
       gradePass.uniforms.uFocusDistance.value = focusDistance;
@@ -370,6 +423,9 @@ export async function createPostprocessing(
     setAutoExposure(a: boolean){
       autoExposure = a;
     },
+    setAutoISO(a: boolean){
+      autoISO = a;
+    },
     setAutoFocus(a: boolean){
       autoFocus = a;
     },
@@ -386,6 +442,7 @@ export async function createPostprocessing(
       fogLayer.setParams(m);
       bloomPass.strength = m.bloom;
       autoExposure = m.autoExposure;
+      autoISO = m.autoISO;
       manualExposure = m.exposure;
       compensation = m.exposureCompensation;
       const g = gradePass.uniforms;

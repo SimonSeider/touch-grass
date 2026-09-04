@@ -131,6 +131,7 @@ function applySettings(s: Settings) {
   RENDER_PARAMS.vignette = g.vignette;
   RENDER_PARAMS.chroma = g.chroma;
   RENDER_PARAMS.autoExposure = s.camera.autoExposure;
+  RENDER_PARAMS.autoISO = s.camera.autoISO;
   RENDER_PARAMS.exposureCompensation = s.camera.exposureCompensation;
   applyRenderParams();
 
@@ -141,7 +142,7 @@ function applySettings(s: Settings) {
   post?.setSSAO(g.ssao);
   post?.setFOV(camera.fov);
   post?.setFocusDistance(s.camera.focusDistance);
-  post?.setAutoFocus(s.camera.autoFocus)
+  post?.setAutoFocus(s.camera.autoFocus);
   post?.setShutterSpeed(1 / s.camera.shutterDenominator);
   post?.setAperture(s.camera.aperture);
   if (!s.camera.autoExposure) post?.setISO(s.camera.iso);
