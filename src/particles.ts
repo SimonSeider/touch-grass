@@ -12,7 +12,7 @@ export interface ParticleLayer {
   dispose: () => void;
 }
 
-const COUNT = 1600;
+const COUNT = 6400;
 const SPREAD = 60;
 const HEIGHT = 16;
 
