@@ -147,16 +147,27 @@
           <section class="page" data-page="camera">
             <div class="group">
               <div class="group-title">Lens</div>
+              <div class="row row-toggle">
+                <div class="name">Auto Focus</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="camera.autoFocus">
+                  <span class="track"></span>
+                </label>
+              </div>
               <div class="row">
                 <div class="name">Field of View <small></small></div>
                 <input type="range" data-setting="camera.fov" data-format="deg" min="55" max="110" step="1">
+              </div>
+              <div class="row" data-enabled-by="!camera.autoFocus">
+                <div class="name">Focus Distance <small></small></div>
+                <input type="range" data-setting="camera.focusDistance" data-format="meters" min="0.5" max="200" step="0.1">
               </div>
             </div>
 
             <div class="group">
               <div class="group-title">Exposure</div>
               <div class="row row-toggle">
-                <div class="name">Auto Exposure</div>
+                <div class="name">Auto ISO</div>
                 <label class="switch">
                   <input type="checkbox" data-setting="camera.autoExposure">
                   <span class="track"></span>
@@ -167,22 +178,21 @@
                 <input type="range" data-setting="camera.exposureCompensation" data-format="ev" min="-3" max="3"
                   step="0.1">
               </div>
-              <div class="row" data-enabled-by="!camera.autoExposure">
+              <div class="row">
                 <div class="name">Shutter Speed <small></small></div>
-                <input type="range" data-setting="camera.shutterDenominator" data-format="shutter" min="2" max="1000"
+                <input type="range" data-setting="camera.shutterDenominator" data-format="shutter" min="2" max="2000"
                   step="1">
               </div>
-              <div class="row" data-enabled-by="!camera.autoExposure">
+              <div class="row">
                 <div class="name">Aperture <small></small></div>
                 <input type="range" data-setting="camera.aperture" data-format="fstop" min="1" max="32" step="1">
               </div>
               <div class="row" data-enabled-by="!camera.autoExposure">
                 <div class="name">ISO <small></small></div>
-                <input type="range" data-setting="camera.iso" data-format="int" min="50" max="8000" step="50">
+                <input type="range" data-setting="camera.iso" data-format="int" min="50" max="12800" step="50">
               </div>
               <div class="note">With auto exposure on, ISO floats to meter the scene and the shutter and aperture only
                 shape sensor noise.</div>
-            </div>
           </section>
 
           <section class="page" data-page="gameplay">
