@@ -138,8 +138,10 @@ function applySettings(s: Settings) {
     camera.fov = s.camera.fov;
     camera.updateProjectionMatrix();
   }
-
   post?.setSSAO(g.ssao);
+  post?.setFOV(camera.fov);
+  post?.setFocusDistance(s.camera.focusDistance);
+  post?.setAutoFocus(s.camera.autoFocus)
   post?.setShutterSpeed(1 / s.camera.shutterDenominator);
   post?.setAperture(s.camera.aperture);
   if (!s.camera.autoExposure) post?.setISO(s.camera.iso);
