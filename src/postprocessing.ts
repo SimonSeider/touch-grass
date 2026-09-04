@@ -43,6 +43,9 @@ export interface PostSetup {
   setAperture: (a: number) => void;
   setISO: (i: number) => void;
   setAutoExposure: (a: boolean) => void;
+  setAutoFocus: (a: boolean) => void;
+  setFocusDistance: (f: number) => void;
+  setFOV: (f: number) => void;
   setSSAO: (enabled: boolean) => void;
 
   exposureInfo: () => { exposure: number; ev100: number; luminance: number; iso: number };
@@ -171,6 +174,31 @@ export async function createPostprocessing(
   composer.addPass(blurH);
   composer.addPass(blurV);
 
+  const focusReadTarget = new THREE.WebGLRenderTarget(1, 1, {
+      type: THREE.FloatType,
+      depthBuffer: false,
+      stencilBuffer: false,
+  });
+
+  const focusReadMat = new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    uniforms: { tDepth: { value: depthTexture } },
+    vertexShader: /* glsl */ `
+      in vec3 position;
+      void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      uniform sampler2D tDepth;
+      out vec4 outColor;
+      void main() {
+          float d = texture(tDepth, vec2(0.5)).r; // sample dead center
+          outColor = vec4(d, d, d, 1.0);
+      }
+    `,
+  });
+  const focusReadQuad = new FullScreenQuad(focusReadMat);
+
   let pauseBlur = 0;
   const MAX_BLUR_TEXELS = 34;
 
@@ -182,6 +210,9 @@ export async function createPostprocessing(
       uNear: { value: camera.near },
       uFar: { value: camera.far },
       uTime: { value: 0 },
+      uFOV: { value: 72 },
+      uFStop: { value: 16 },
+      uFocusDistance: { value: 50 },
       uExposure: { value: 0.26 },
       uVignette: { value: 0.30 },
       uContrast: { value: 1.06 },
@@ -189,6 +220,8 @@ export async function createPostprocessing(
       uWarmth: { value: 0.10 },
       uChroma: { value: 0.0035 },
       uAspect: { value: size.width / size.height },
+      uWidth: { value: size.width },
+      uHeight: { value: size.height },
 
       uReadNoise: { value: 0.002 * (100.0 / 100.0) },
       uShotNoise: { value: 0.01 * Math.sqrt((100.0 / 100.0) / Math.max((0.008 / (16.0 * 16.0)), 0.0001))},
@@ -201,16 +234,46 @@ export async function createPostprocessing(
   }));
 
   composer.addPass(gradePass);
+  
+  const FOCUS_READ_INTERVAL = 0.1;
+  const FOCUS_PULL_SPEED = 3.0;
+  const focusPixelBuffer = new Float32Array(4);
+
+  let focusReadTimer = 0;
+  let currentFocusDistance = 50;
+  let targetFocusDistance = 50;
+  
+  let focusDistance = 50;
 
   let autoExposure = true;
+  let autoFocus = true;
   let manualExposure = 0.26;
   let compensation = 0;
 
   let shutterSpeed = 0.008;
   let aperture = 16;
   let ISO = 100;
-  
+  let FOV = 72;
+
   const exposureState: ExposureState = { ev100: SUNNY_16_EV100 };
+
+  function linearizeDepth(d: number, near: number, far: number): number {
+      const zNdc = d * 2.0 - 1.0;
+      return (2.0 * near * far) / (far + near - zNdc * (far - near));
+  }
+  
+  function sampleDepthAtCenter(): number {
+      renderer.setRenderTarget(focusReadTarget);
+      focusReadQuad.render(renderer);
+      renderer.setRenderTarget(null);
+      renderer.readRenderTargetPixels(focusReadTarget, 0, 0, 1, 1, focusPixelBuffer);
+      return focusPixelBuffer[0];
+  }
+
+  function updateAutoFocus(dt: number) {
+    const t = 1 - Math.exp(-FOCUS_PULL_SPEED * dt);
+    currentFocusDistance += (targetFocusDistance - currentFocusDistance) * t;
+  }
 
   const render = (time: number, dt: number) => {
     cloudLayer.setTime(time);
@@ -219,11 +282,10 @@ export async function createPostprocessing(
 
     if (autoExposure) {
       const targetEv = ev100FromLuminance(meter.luminance * NITS_PER_SCENE_UNIT) - compensation;
-      const ev = adaptEv100(exposureState, targetEv, Math.min(dt, 0.1));
-      gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev);
+      const requiredIso = 100.0 * Math.pow(2, ev100FromCamera(aperture, shutterSpeed, 100) - adaptEv100(exposureState, targetEv, Math.min(dt, 0.1)));
 
-      const physicalEv100AtIso100 = ev100FromCamera(aperture, shutterSpeed, 100);
-      ISO = Math.max(100.0, 100.0 * Math.pow(2, physicalEv100AtIso100 - ev));
+      ISO = Math.max(50.0, Math.min(12800.0, requiredIso));
+      gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
     } else {
       gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
     }
@@ -231,8 +293,25 @@ export async function createPostprocessing(
     const sensorLight = (shutterSpeed / (aperture * aperture));
     const ISOGain = ISO / 100.0;
 
-    gradePass.uniforms.uReadNoise.value = 0.00005 * ISOGain; 
-    gradePass.uniforms.uShotNoise.value = 0.0005 * Math.sqrt(ISOGain / Math.max(sensorLight, 0.001));
+    gradePass.uniforms.uReadNoise.value = 0.00003 * ISOGain; 
+    gradePass.uniforms.uShotNoise.value = 0.00003 * Math.sqrt(ISOGain / Math.max(sensorLight, 0.001));
+
+    gradePass.uniforms.uFOV.value = FOV;
+    gradePass.uniforms.uFStop.value = aperture;
+    
+    focusReadTimer += dt;
+    if(autoFocus){
+      focusReadTimer += dt;
+      if(focusReadTimer >= FOCUS_READ_INTERVAL){
+        focusReadTimer = 0;
+        const rawDepth = sampleDepthAtCenter();
+        targetFocusDistance = linearizeDepth(rawDepth, camera.near, camera.far);
+      }
+      updateAutoFocus(dt);
+      gradePass.uniforms.uFocusDistance.value = currentFocusDistance;
+    } else {
+      gradePass.uniforms.uFocusDistance.value = focusDistance;
+    }
 
     renderer.setRenderTarget(depthTarget);
     renderer.render(scene, camera);
@@ -266,6 +345,8 @@ export async function createPostprocessing(
       blurH.uniforms.uDirection.value.set(1 / (width * dpr), 0);
       blurV.uniforms.uDirection.value.set(0, 1 / (height * dpr));
       gradePass.uniforms.uAspect.value = width / height;
+      gradePass.uniforms.uWidth.value = width;
+      gradePass.uniforms.uHeight.value = height;
       lensMat.uniforms.uAspect.value = width / height;
       overlay?.setSize(width * dpr, height * dpr, dpr);
     },
@@ -289,6 +370,15 @@ export async function createPostprocessing(
     setAutoExposure(a: boolean){
       autoExposure = a;
     },
+    setAutoFocus(a: boolean){
+      autoFocus = a;
+    },
+    setFocusDistance(f: number){
+      focusDistance = f;
+    },
+    setFOV(f: number){
+      FOV = f;
+    },
     setSSAO(enabled: boolean){
       ssaoPass.enabled = enabled;
     },
@@ -303,7 +393,6 @@ export async function createPostprocessing(
       g.uContrast.value = m.contrast;
       g.uWarmth.value = m.warmth;
       g.uVignette.value = m.vignette;
-      //g.uGrain.value = m.grain;
       g.uChroma.value = m.chroma;
       const c = cloudLayer.pass.material.uniforms;
       c.uCoverageLow.value = m.cloudCoverageLow;
