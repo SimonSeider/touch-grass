@@ -309,8 +309,8 @@ export async function createPostprocessing(
       targetAperture = Math.max(1.4, Math.min(16.0, Math.sqrt(Math.pow(2, ev * 0.5))));
 
       let targetShutter = (targetAperture * targetAperture) / evRatio;
-      const minShutter = 1 / 8000;
-      const maxShutter = 30.0;
+      const minShutter = 1 / 2000;
+      const maxShutter = 1 / 2;
       targetShutter = Math.max(minShutter, Math.min(maxShutter, targetShutter));
       targetShutterSpeed = targetShutter;
 
@@ -352,7 +352,6 @@ export async function createPostprocessing(
     gradePass.uniforms.uFOV.value = FOV;
     gradePass.uniforms.uFStop.value = aperture;
     
-    focusReadTimer += dt;
     if(autoFocus){
       focusReadTimer += dt;
       if(focusReadTimer >= FOCUS_READ_INTERVAL){
