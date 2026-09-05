@@ -39,6 +39,7 @@ const FORMATTERS: Record<string, Formatter> = {
   chunks: (v) => `${Math.round(v)} chunks`,
   speed: (v) => `${v.toFixed(1)} m/s`,
   meters: (v) => `${v.toFixed(2)} m`,
+  ms: (v) => `${(1000 / v).toFixed(0)} ms`,
 };
 
 const TAB_KEY = 'touch-grass.tab';
@@ -91,7 +92,6 @@ export function createUi(options: UiOptions): Ui {
     saveSettings(settings);
   }
 
-  // Sliders and switches are declared in the markup; everything here is generic.
   const rangeInputs = Array.from(
     menuEl.querySelectorAll<HTMLInputElement>('input[type="range"][data-setting]'),
   );
@@ -131,18 +131,6 @@ export function createUi(options: UiOptions): Ui {
     });
   }
 
-  // Rows that only make sense while another setting is on, e.g. manual exposure.
-  /*const gatedRows = Array.from(menuEl.querySelectorAll<HTMLElement>('[data-enabled-by]'));
-  for (const row of gatedRows) {
-    const raw = row.dataset.enabledBy as string;
-    const negated = raw.startsWith('!');
-    const path = negated ? raw.slice(1) : raw;
-    syncers.push(() => {
-      const on = Boolean(readPath(settings, path)) !== negated;
-      row.classList.toggle('dimmed', !on);
-    });
-  }*/
-  
   const gatedRows = Array.from(menuEl.querySelectorAll<HTMLElement>('[data-enabled-by]'));
   for(const row of gatedRows){
       const raw = row.dataset.enabledBy as string;

@@ -243,11 +243,47 @@
             </div>
 
             <div class="group">
+              <div class="group-title">Physics</div>
+              <div class="row">
+                <div class="name">Responsiveness <small></small></div>
+                <input type="range" data-setting="gameplay.acceleration" data-format="ms" min="4" max="40" step="1">
+              </div>
+              <div class="row">
+                <div class="name">Ground Friction <small></small></div>
+                <input type="range" data-setting="gameplay.friction" data-format="f2" min="1" max="20" step="0.25">
+              </div>
+              <div class="row">
+                <div class="name">Air Control <small></small></div>
+                <input type="range" data-setting="gameplay.airControl" data-format="pctOfOne" min="0" max="1"
+                  step="0.05">
+              </div>
+              <div class="row">
+                <div class="name">Slope Grip Limit <small></small></div>
+                <input type="range" data-setting="gameplay.slopeLimit" data-format="deg" min="10" max="50" step="1">
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Slide</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="gameplay.slide">
+                  <span class="track"></span>
+                </label>
+              </div>
+              <div class="row row-toggle">
+                <div class="name">Unlimited Momentum</div>
+                <label class="switch">
+                  <input type="checkbox" data-setting="gameplay.momentum">
+                  <span class="track"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="group">
               <div class="group-title">Controls</div>
               <div class="readout"><span>Move</span><b>W A S D</b></div>
               <div class="readout"><span>Sprint</span><b>Shift</b></div>
               <div class="readout"><span>Jump</span><b>Space</b></div>
-              <div class="readout"><span>Crouch</span><b>Ctrl</b></div>
+              <div class="readout"><span>Crouch</span><b>C</b></div>
+              <div class="readout"><span>Slide</span><b>C while moving</b></div>
               <div class="readout"><span>Pause</span><b>Esc</b></div>
             </div>
           </section>
