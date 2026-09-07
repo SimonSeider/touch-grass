@@ -38,6 +38,12 @@ export interface GameplaySettings {
   runSpeed: number;
   jumpHeight: number;
   sprintToggle: boolean;
+  acceleration: number;
+  friction: number;
+  airControl: number;
+  slopeLimit: number;
+  slide: boolean;
+  momentum: boolean;
 }
 
 export interface AudioSettings {
@@ -102,6 +108,12 @@ export const DEFAULT_SETTINGS: Settings = {
     runSpeed: 6.2,
     jumpHeight: 1.4,
     sprintToggle: false,
+    acceleration: 14,
+    friction: 10,
+    airControl: 0.15,
+    slopeLimit: 22,
+    slide: true,
+    momentum: false,
   },
   audio: {
     master: 100,

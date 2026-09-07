@@ -7,50 +7,92 @@ export interface PlayerTuning {
   invertY: boolean;
   walkSpeed: number;
   runSpeed: number;
-  /** Peak height of a jump, in metres. */
   jumpHeight: number;
   sprintToggle: boolean;
+  acceleration: number;
+  friction: number;
+  airControl: number;
+  slopeLimit: number;
+  slide: boolean;
+  momentum: boolean;
 }
 
 export interface Player {
   update: (dt: number) => void;
   lock: () => void;
   isWalking: () => boolean;
+  isSliding: () => boolean;
+  speed: () => number;
   setPaused: (paused: boolean) => void;
   setTuning: (tuning: Partial<PlayerTuning>) => void;
   position: () => THREE.Vector3;
 }
 
-const EYE = 1.65;
+const EYE_STAND = 1.65;
+const EYE_CROUCH = 1.0;
+const EYE_SLIDE = 0.72;
+const EYE_SMOOTH = 0.085;
+
 const GRAVITY = 24;
-const RADIUS = 0.4;
 const LOOK_SPEED = 0.0022;
+
+const STOP_SPEED = 1.6;
+const NORMAL_EPS = 0.35;
+const SLIP_BAND = 6;
+const SLOPE_ASSIST = 0.9;
+
+const CROUCH_SPEED_SCALE = 0.45;
+const SLIDE_MIN_SPEED = 2.5;
+const SLIDE_END_SPEED = 1.8;
+const SLIDE_BOOST = 1.25;
+const SLIDE_MAX_BOOST = 1.4;
+const SLIDE_FRICTION = 1.5;
+const SLIDE_STEER = 4.5;
+const SLIDE_COOLDOWN = 0.5;
+const MOMENTUM_DRAG = 0.35;
+
+const COYOTE_TIME = 0.12;
+const JUMP_BUFFER = 0.12;
+const SNAP_LOCK = 0.1;
 
 interface Keys {
   w: boolean; s: boolean; a: boolean; d: boolean;
-  shift: boolean; space: boolean; ctrl: boolean;
+  shift: boolean; space: boolean; crouch: boolean;
 }
 
 export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn): Player {
   camera.rotation.order = 'YXZ';
-  camera.position.set(0, heightAt(0, 0) + EYE, 0);
 
-  const keys: Keys = { w: false, s: false, a: false, d: false, shift: false, space: false, ctrl: false };
+  const keys: Keys = { w: false, s: false, a: false, d: false, shift: false, space: false, crouch: false };
   let yaw = 0;
   let pitch = 0;
-  let velocity = new THREE.Vector3();
-  const forward = new THREE.Vector3();
-  const right = new THREE.Vector3();
-  let grounded = false;
+
+  const feet = new THREE.Vector3(0, heightAt(0, 0), 0);
+  const velocity = new THREE.Vector3();
+  const normal = new THREE.Vector3(0, 1, 0);
+  const wishDir = new THREE.Vector2();
+
+  let eyeHeight = EYE_STAND;
+  let grounded = true;
   let locked = false;
   let started = false;
   let dragging = false;
-  let hasPointerLockEver = false;
 
   let crouching = false;
+  let sliding = false;
+  let slipping = 0;
+  let slideLocked = false;
+  let slideCooldown = 0;
+  let coyote = 0;
+  let jumpBuffer = 0;
+  let jumpQueued = false;
+  let snapLock = 0;
+
   let paused = false;
   let hadLockBeforePause = false;
   let sprinting = false;
+
+  camera.position.set(feet.x, feet.y + eyeHeight, feet.z);
 
   const tuning: PlayerTuning = {
     sensitivity: 1,
@@ -59,6 +101,12 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
     runSpeed: 6.2,
     jumpHeight: 1.4,
     sprintToggle: false,
+    acceleration: 14,
+    friction: 10,
+    airControl: 0.15,
+    slopeLimit: 22,
+    slide: true,
+    momentum: false,
   };
 
   window.addEventListener('keydown', (e) => {
@@ -71,8 +119,12 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
         if (tuning.sprintToggle && !keys.shift) sprinting = !sprinting;
         keys.shift = true;
         break;
-      case 'Space': keys.space = true; if (!paused) e.preventDefault(); break;
-      case 'ControlLeft': keys.ctrl = true; break;
+      case 'Space':
+        if (!keys.space) jumpQueued = true;
+        keys.space = true;
+        if (!paused) e.preventDefault();
+        break;
+      case 'KeyC': keys.crouch = true; break;
     }
   });
   window.addEventListener('keyup', (e) => {
@@ -83,7 +135,7 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
       case 'KeyD': keys.d = false; break;
       case 'ShiftLeft': case 'ShiftRight': keys.shift = false; break;
       case 'Space': keys.space = false; break;
-      case 'ControlLeft': keys.ctrl = false; break;
+      case 'KeyC': keys.crouch = false; slideLocked = false; break;
     }
   });
 
@@ -151,7 +203,6 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
   document.addEventListener('pointerlockchange', () => {
     locked = document.pointerLockElement === document.body;
     if (locked) {
-      hasPointerLockEver = true;
       dragging = false;
     }
   });
@@ -161,69 +212,216 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
     requestLock();
   }
 
-  document.addEventListener('click', (e) => {
+  document.addEventListener('click', () => {
     if (!started || locked || paused) return;
     requestLock();
   });
 
+  function horizontalSpeed() {
+    return Math.hypot(velocity.x, velocity.z);
+  }
+
+  function sampleNormal(x: number, z: number) {
+    const gx = (heightAt(x + NORMAL_EPS, z) - heightAt(x - NORMAL_EPS, z)) / (2 * NORMAL_EPS);
+    const gz = (heightAt(x, z + NORMAL_EPS) - heightAt(x, z - NORMAL_EPS)) / (2 * NORMAL_EPS);
+    normal.set(-gx, 1, -gz).normalize();
+  }
+
+  function brakeTo(target: number, coefficient: number, dt: number) {
+    const speed = horizontalSpeed();
+    if (speed <= target || speed <= 0) return;
+    const drop = Math.max(speed, STOP_SPEED) * coefficient * dt;
+    const scale = Math.max(speed - drop, target) / speed;
+    velocity.x *= scale;
+    velocity.z *= scale;
+  }
+
+  function accelerate(wishSpeed: number, accel: number, dt: number) {
+    if (wishSpeed <= 0 || accel <= 0) return;
+    const current = velocity.x * wishDir.x + velocity.z * wishDir.y;
+    const missing = wishSpeed - current;
+    if (missing <= 0) return;
+    const step = Math.min(accel * dt, missing);
+    velocity.x += wishDir.x * step;
+    velocity.z += wishDir.y * step;
+  }
+
+  function scrubLateral(coefficient: number, dt: number) {
+    const along = velocity.x * wishDir.x + velocity.z * wishDir.y;
+    const lx = velocity.x - wishDir.x * along;
+    const lz = velocity.z - wishDir.y * along;
+    const lateral = Math.hypot(lx, lz);
+    if (lateral <= 1e-4) return;
+    const drop = Math.max(lateral, STOP_SPEED) * coefficient * dt;
+    const scale = Math.max(lateral - drop, 0) / lateral;
+    velocity.x = wishDir.x * along + lx * scale;
+    velocity.z = wishDir.y * along + lz * scale;
+  }
+
+  function steerSlide(dt: number) {
+    let ax = wishDir.x;
+    let az = wishDir.y;
+    const speed = horizontalSpeed();
+    if (speed > 0.1) {
+      const dx = velocity.x / speed;
+      const dz = velocity.z / speed;
+      const along = ax * dx + az * dz;
+      ax -= dx * along;
+      az -= dz * along;
+    }
+    const len = Math.hypot(ax, az);
+    if (len < 1e-4) return;
+    velocity.x += (ax / len) * SLIDE_STEER * dt;
+    velocity.z += (az / len) * SLIDE_STEER * dt;
+  }
+
   function update(dt: number) {
-    if (paused) return;
-    forward.set(0, 0, -1).applyQuaternion(camera.quaternion);
-    forward.y = 0;
-    forward.normalize();
-    right.set(1, 0, 0).applyQuaternion(camera.quaternion);
-    right.y = 0;
-    right.normalize();
+    if (paused || dt <= 0) return;
 
-    const running = tuning.sprintToggle ? sprinting : keys.shift;
-    const speed = running ? tuning.runSpeed : tuning.walkSpeed;
-    const wish = new THREE.Vector3();
-    if (keys.w) wish.add(forward);
-    if (keys.s) wish.sub(forward);
-    if (keys.d) wish.add(right);
-    if (keys.a) wish.sub(right);
-    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed);
+    slideCooldown = Math.max(0, slideCooldown - dt);
+    snapLock = Math.max(0, snapLock - dt);
 
-    const accel = grounded ? 14 : 3;
-    velocity.x += (wish.x - velocity.x) * Math.min(1, accel * dt);
-    velocity.z += (wish.z - velocity.z) * Math.min(1, accel * dt);
+    const sinYaw = Math.sin(yaw);
+    const cosYaw = Math.cos(yaw);
+    wishDir.set(0, 0);
+    if (keys.w) wishDir.set(wishDir.x - sinYaw, wishDir.y - cosYaw);
+    if (keys.s) wishDir.set(wishDir.x + sinYaw, wishDir.y + cosYaw);
+    if (keys.d) wishDir.set(wishDir.x + cosYaw, wishDir.y - sinYaw);
+    if (keys.a) wishDir.set(wishDir.x - cosYaw, wishDir.y + sinYaw);
+    const moving = wishDir.lengthSq() > 0;
+    if (moving) wishDir.normalize();
 
-    if (keys.space && grounded) {
+    sampleNormal(feet.x, feet.z);
+    const slopeAngle = Math.acos(Math.min(1, normal.y)) * (180 / Math.PI);
+    const limit = tuning.slopeLimit;
+    const slipT = Math.min(Math.max((slopeAngle - limit) / SLIP_BAND, 0), 1);
+    const slip = slipT * slipT * (3 - 2 * slipT);
+    slipping = slip;
+
+    const speedNow = horizontalSpeed();
+
+    if (sliding) {
+      const done = !keys.crouch || !tuning.slide || (grounded && speedNow < SLIDE_END_SPEED && slip < 0.5);
+      if (done) {
+        sliding = false;
+        slideCooldown = SLIDE_COOLDOWN;
+        if (keys.crouch) slideLocked = true;
+      }
+    } else if (keys.crouch && tuning.slide && grounded && !slideLocked && speedNow >= SLIDE_MIN_SPEED) {
+      sliding = true;
+      if (slideCooldown <= 0) {
+        const boosted = tuning.momentum
+          ? speedNow * SLIDE_BOOST
+          : Math.min(speedNow * SLIDE_BOOST, tuning.runSpeed * SLIDE_MAX_BOOST);
+        if (boosted > speedNow) {
+          velocity.x *= boosted / speedNow;
+          velocity.z *= boosted / speedNow;
+        }
+      }
+    }
+    crouching = keys.crouch && !sliding;
+    const running = (tuning.sprintToggle ? sprinting : keys.shift) && !crouching;
+
+    const slopePull = GRAVITY * normal.y;
+    const slopeStrength = sliding ? 1 : slip;
+
+    if (grounded) {
+      let wishSpeed = 0;
+      if (moving && !sliding) {
+        wishSpeed = crouching
+          ? tuning.walkSpeed * CROUCH_SPEED_SCALE
+          : running ? tuning.runSpeed : tuning.walkSpeed;
+        const grade = wishDir.x * normal.x + wishDir.y * normal.z;
+        wishSpeed *= Math.min(Math.max(1 + SLOPE_ASSIST * grade, 0.35), 1.3);
+        wishSpeed *= 1 - slip;
+      }
+
+      const friction = sliding
+        ? SLIDE_FRICTION
+        : tuning.friction + (SLIDE_FRICTION - tuning.friction) * slip;
+      if (tuning.momentum && moving && !sliding) brakeTo(wishSpeed, MOMENTUM_DRAG, dt);
+      else brakeTo(sliding ? 0 : wishSpeed, friction, dt);
+
+      if (slopeStrength > 0) {
+        velocity.x += normal.x * slopePull * slopeStrength * dt;
+        velocity.z += normal.z * slopePull * slopeStrength * dt;
+      }
+
+      if (sliding) {
+        if (moving) steerSlide(dt);
+      } else if (moving) {
+        scrubLateral(tuning.momentum ? MOMENTUM_DRAG : friction, dt);
+        accelerate(wishSpeed, tuning.acceleration * wishSpeed * (1 - 0.85 * slip), dt);
+      }
+    } else if (moving) {
+      const wishSpeed = running ? tuning.runSpeed : tuning.walkSpeed;
+      accelerate(wishSpeed, tuning.acceleration * wishSpeed * tuning.airControl, dt);
+    }
+
+    if (tuning.momentum && keys.space) jumpQueued = true;
+    if (jumpQueued) {
+      jumpBuffer = JUMP_BUFFER;
+      jumpQueued = false;
+    }
+    jumpBuffer = Math.max(0, jumpBuffer - dt);
+    coyote = grounded ? COYOTE_TIME : Math.max(0, coyote - dt);
+
+    if (jumpBuffer > 0 && coyote > 0) {
       velocity.y = Math.sqrt(2 * GRAVITY * tuning.jumpHeight);
+      jumpBuffer = 0;
+      coyote = 0;
       grounded = false;
+      snapLock = SNAP_LOCK;
+      if (sliding) {
+        sliding = false;
+        slideCooldown = SLIDE_COOLDOWN;
+        if (keys.crouch) slideLocked = true;
+      }
     }
 
     velocity.y -= GRAVITY * dt;
 
-    camera.position.x += velocity.x * dt;
-    camera.position.z += velocity.z * dt;
-    camera.position.y += velocity.y * dt;
+    const wasGrounded = grounded;
+    feet.x += velocity.x * dt;
+    feet.z += velocity.z * dt;
+    feet.y += velocity.y * dt;
 
-    const ground = heightAt(camera.position.x, camera.position.z) + EYE;
-    if (camera.position.y <= ground) {
-      camera.position.y = ground;
+    const groundY = heightAt(feet.x, feet.z);
+    if (feet.y <= groundY) {
+      feet.y = groundY;
+      if (velocity.y < 0) velocity.y = 0;
+      grounded = true;
+    } else if (wasGrounded && snapLock <= 0 && velocity.y <= 0
+      && feet.y - groundY <= 0.25 + horizontalSpeed() * dt * 1.5) {
+      feet.y = groundY;
       velocity.y = 0;
       grounded = true;
     } else {
       grounded = false;
     }
 
-    crouching = keys.ctrl;
-    if (crouching && grounded) {
-      const target = heightAt(camera.position.x, camera.position.z) + EYE * 0.5;
-      camera.position.y = Math.max(camera.position.y - dt * 3.0, target);
-    }
+    const targetEye = sliding ? EYE_SLIDE : crouching ? EYE_CROUCH : EYE_STAND;
+    eyeHeight += (targetEye - eyeHeight) * (1 - Math.exp(-dt / EYE_SMOOTH));
+
+    camera.position.set(feet.x, feet.y + eyeHeight, feet.z);
   }
 
   return {
     update,
     lock,
     isWalking() {
-      return grounded && Math.hypot(velocity.x, velocity.z) > 0.5;
+      return grounded && !sliding && slipping < 0.5 && Math.hypot(velocity.x, velocity.z) > 0.5;
+    },
+    isSliding() {
+      return sliding;
+    },
+    speed() {
+      return Math.hypot(velocity.x, velocity.z);
     },
     setTuning(next) {
       Object.assign(tuning, next);
       if (!tuning.sprintToggle) sprinting = false;
+      if (!tuning.slide) sliding = false;
     },
     position() {
       return camera.position;
