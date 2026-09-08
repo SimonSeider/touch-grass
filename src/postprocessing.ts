@@ -302,7 +302,7 @@ export async function createPostprocessing(
     
     if (autoExposure) {
       const targetEv = ev100FromLuminance(meter.luminance * NITS_PER_SCENE_UNIT) - compensation;
-      const ev = adaptEv100(exposureState, targetEv, Math.min(dt, 0.1)); // this already smooths EV, keep it
+      const ev = adaptEv100(exposureState, targetEv, Math.min(dt, 0.1)); // Simon, this already smooths EV, keep it plz
 
       const evRatio = Math.pow(2, ev);
 

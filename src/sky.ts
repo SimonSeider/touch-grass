@@ -62,6 +62,15 @@ function parseStarCatalog(datText: string, sphereRadius: number){
   return geometry;
 }
 
+function getLSTRadians(date: Date, longitudeDeg: number = 0): number {
+  const d = (date.getTime() - 946728000000) / 86400000;
+  let gmst = (280.46061837 + 360.98564736629 * d) % 360;
+  if(gmst < 0)
+      gmst += 360;
+
+  return THREE.MathUtils.degToRad((gmst + longitudeDeg) % 360);
+}
+
 export function createSky(): SkyLayer {
   const group = new THREE.Group();
 
@@ -150,15 +159,34 @@ export function createSky(): SkyLayer {
     },
     update(_dt: number, _t: number, camPos: THREE.Vector3, sunDir: THREE.Vector3) {
       group.position.copy(camPos);
-      const sunAngle = Math.atan2(sunDir.y, sunDir.x);
-      const lstRadians = sunAngle + Math.PI;
+      
+      // This is still being tested
+      /*const currentDate = new Date();
+      const lstRadians = getLSTRadians(currentDate, 0);
+
       const latitudeDeg = 90.0;
       starPoints.rotation.order = 'ZYX';
       starPoints.rotation.y = THREE.MathUtils.degToRad(latitudeDeg);
       starPoints.rotation.x = -lstRadians;
-      //starPoints.visible = sunDir.y < 0.1;
+      starPoints.updateMatrix();
+      starPoints.updateMatrixWorld(true);*/
+
+      const targetDate = new Date();
+      const startOfYear = new Date(targetDate.getFullYear(), 0, 0);
+      const diff = targetDate.getTime() - startOfYear.getTime();
+      const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const dateOffset = (dayOfYear / 365.25) * Math.PI * 2;
+
+      const sunAngle = Math.atan2(sunDir.y, sunDir.x);
+      const lstRadians = sunAngle + Math.PI + dateOffset;
+
+      const latitudeDeg = 90.0;
+      starPoints.rotation.order = 'ZYX';
+      starPoints.rotation.y = THREE.MathUtils.degToRad(latitudeDeg);
+      starPoints.rotation.x = -lstRadians;
       starPoints.updateMatrix();
       starPoints.updateMatrixWorld(true);
+
       domeMat.uniforms.uTime.value = _t;
       domeMat.uniforms.uSunDir.value.copy(sunDir);
       probeGroundMat.uniforms.uSunDir.value.copy(sunDir);
