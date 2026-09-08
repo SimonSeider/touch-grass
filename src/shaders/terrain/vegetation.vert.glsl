@@ -1,0 +1,37 @@
+attribute vec3 color;
+attribute float aFlutter;
+varying vec2 vPlantUv;
+uniform float uTime;
+uniform float uWindStrength;
+uniform vec2 uWindFrequency;
+uniform vec4 uWindDistMapST;
+uniform sampler2D uWindDistortionMap;
+varying float vHeight;
+varying float vMask;
+varying vec3 vGroundColor;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+varying float vSeed;
+void main() {
+  vPlantUv = uv;
+  vec3 base = instanceMatrix[3].xyz;
+  vec3 p = (instanceMatrix * vec4(position, 1.0)).xyz;
+  vec2 uv = base.xz * uWindDistMapST.xy + uWindDistMapST.zw + uWindFrequency * uTime;
+  vec2 wind = (texture2D(uWindDistortionMap, uv).xy * 2.0 - 1.0) * uWindStrength;
+  float h = max(0.0, p.y - base.y);
+  float phase = dot(base.xz, vec2(0.73, 0.51));
+  vec2 breeze = vec2(sin(uTime * 1.7 + phase), cos(uTime * 1.3 + phase)) * 0.10 * uWindStrength;
+  p.xz += (wind * 0.5 + breeze) * h * h;
+  float flutter = sin(uTime * 4.1 + phase + position.y * 3.0) * aFlutter * 0.018 * uWindStrength;
+  p.y += flutter;
+  p.x += flutter * 0.4;
+  vec3 n = mat3(instanceMatrix) * normal;
+  n.y -= dot((wind + breeze * 2.0) * h, n.xz);
+  vNormal = normalize(n);
+  vWorldPos = p;
+  vGroundColor = color;
+  vHeight = clamp(position.y / 0.85, 0.25, 1.0);
+  vSeed = fract(sin(dot(base.xz, vec2(12.9898,78.233))) * 43758.5453);
+  vMask = 1.0;
+  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}

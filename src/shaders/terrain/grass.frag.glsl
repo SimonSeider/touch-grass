@@ -10,6 +10,10 @@ uniform float uTranslucentGain;
 uniform float uGrassMaskThreshold;
 
 uniform vec3 uSH[9];
+#ifdef MEADOW_TEXTURE
+uniform sampler2D uAlbedoMap;
+varying vec2 vPlantUv;
+#endif
 
 uniform sampler2D uHeightMap;
 uniform vec2 uHeightMapCenter;
@@ -56,6 +60,12 @@ float terrainShadow(vec3 p, vec3 sunN) {
 }
 
 void main() {
+  vec3 surfaceColor = vGroundColor;
+#ifdef MEADOW_TEXTURE
+  vec4 texel = texture2D(uAlbedoMap, vPlantUv);
+  if (texel.a < 0.4) discard;
+  surfaceColor = texel.rgb;
+#endif
   if (vMask < uGrassMaskThreshold) discard;
 
   vec3 n = normalize(vNormal);
@@ -73,6 +83,11 @@ void main() {
   float ndl = lightWrapped(n, l, 0.45);
 
   vec3 ambient = lightIrradianceSH(n, uSH) * canopyAO;
+#ifdef MEADOW_PLANT
+  // Thin leaves and petals receive diffuse light through both surfaces.
+  ambient = mix(lightIrradianceSH(n, uSH), lightIrradianceSH(-n, uSH), 0.4) * canopyAO;
+  ndl = mix(ndl, lightWrapped(-n, l, 0.45), 0.35);
+#endif
 
   vec3 sunLight = uSunColor * uSunEnergy * uSunRadiance;
   float moonShadow = skyNight(uSunDir) > 0.001 ? terrainShadow(vWorldPos, -l) : 0.0;
@@ -80,9 +95,12 @@ void main() {
 
   float trans = lightTranslucency(n, v, l, 3.0);
   vec3 sssTint = vec3(0.72, 1.00, 0.34);
+#ifdef MEADOW_PLANT
+  sssTint = surfaceColor * 0.35;
+#endif
   vec3 sss = sunLight * sssTint * trans * shadow * uTranslucentGain * smoothstep(0.0, 0.5, vHeight);
 
-  vec3 albedo = max(vGroundColor, 0.0);
+  vec3 albedo = max(surfaceColor, 0.0);
 
   albedo *= mix(vec3(0.55, 0.62, 0.52), vec3(1.06, 1.04, 0.86), vHeight);
 

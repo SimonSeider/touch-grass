@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { createSky } from './sky';
 import { createTerrain } from './terrain';
 import { createGrass } from './grass';
+import { createVegetation } from './vegetation';
+import { createMeadowLife } from './meadowlife';
 import { createPlayer } from './player';
 import { createParticles } from './particles';
 import { createAudio } from './audio';
@@ -43,6 +45,11 @@ terrainLayer.material.light = sun;
 const grassLayer = createGrass(terrainLayer.heightAt, terrainLayer.shadowUniforms);
 scene.add(grassLayer.group);
 grassLayer.material.light = sun;
+
+const vegetation = createVegetation(terrainLayer.heightAt, grassLayer);
+scene.add(vegetation.group);
+const meadowLife = createMeadowLife(terrainLayer.heightAt, vegetation.material);
+scene.add(meadowLife.group);
 
 // Composited by its own pass after fog and clouds, so it stays out of the main scene.
 const particles = createParticles();
@@ -115,9 +122,13 @@ function applySettings(s: Settings) {
   applyResolutionScale(g.resolutionScale);
   grassLayer.setViewDistance(g.viewDistance);
   grassLayer.setDensity(g.grassDensity);
+  vegetation.setViewDistance(g.viewDistance);
+  vegetation.setDensity(g.grassDensity);
+  vegetation.material.wireframe = s.debug.wireframe;
   grassLayer.setWireframe(s.debug.wireframe);
   terrainLayer.material.wireframe = s.debug.wireframe;
   particles.points.visible = g.particles;
+  meadowLife.group.visible = g.particles;
 
   RENDER_PARAMS.bloom = g.bloom;
   RENDER_PARAMS.fogDensity = g.fogDensity;
@@ -196,7 +207,6 @@ function animate() {
   const t = clock.elapsedTime;
 
   player.update(dt);
-  audio.update(dt, player.isWalking());
   ui.tick(dt);
 
   const localTime = timeOfDay();
@@ -207,7 +217,11 @@ function animate() {
     sunDir.set(localTime.x, localTime.y, localTime.z);
   }
   const night = nightAmount(sunDir.y);
-  audio.setNight(night);
+  audio.update(dt, player.isWalking(), {
+    x: camera.position.x, z: camera.position.z,
+    sunY: sunDir.y, sunX: sunDir.x, time: t,
+    rightX: camera.matrixWorld.elements[0], rightZ: camera.matrixWorld.elements[2],
+  });
   sky.setHaze(RENDER_PARAMS.haze * (1 - night * 0.4));
   post?.setParams({
     ...RENDER_PARAMS,
@@ -230,6 +244,8 @@ function animate() {
 
   skyProbe.update(dt);
   grassLayer.update(t, camera.position);
+  vegetation.update(camera.position);
+  meadowLife.update(t, camera.position, sunDir);
   terrainLayer.update(camera.position);
   particles.update(t, camera.position, sunDir, sunColor);
 

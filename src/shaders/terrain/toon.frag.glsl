@@ -7,6 +7,7 @@ uniform float uSunEnergy;
 
 uniform float uSunRadiance;
 uniform float uRim;
+uniform sampler2D uGroundCover;
 
 uniform vec3 uSH[9];
 
@@ -79,6 +80,8 @@ void main() {
   ambient *= ao;
 
   vec3 base = max(vColor, 0.0);
+  vec3 groundDetail = texture2D(uGroundCover, vWorldPos.xz / 3.0).rgb;
+  base = mix(base, groundDetail, 0.85 * smoothstep(0.72, 0.95, n.y));
 
   vec3 sunLight = uSunColor * uSunEnergy * uSunRadiance;
   float moonShadow = skyNight(uSunDir) > 0.001 ? terrainShadow(vWorldPos, -l, jitter) : 0.0;

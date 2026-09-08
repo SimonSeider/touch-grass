@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { meadowGrassScale } from './meadow';
+import plantSurfaceUrl from './textures/plant-surfaces.png?url';
 import { grassAt, type ShadowFieldUniforms } from './terrain';
 import { resolveIncludes } from './shaderlib';
 import grassVert from './shaders/terrain/grass.vert.glsl?raw';
@@ -28,7 +30,7 @@ const DEFAULT_LOAD_RADIUS = 5;
 const SEGS = 3;
 const BUILD_BUDGET = 4;
 
-const GRID_BASE = 96;
+const GRID_BASE = 80;
 function gridFor(dist: number, density: number): number {
   return Math.max(8, Math.round((GRID_BASE * density) / (1.0 + dist * 0.28)));
 }
@@ -78,6 +80,9 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
   let density = 1;
 
   const groundTex = buildGroundTexture();
+  const atlas = new THREE.TextureLoader().load(plantSurfaceUrl);
+  atlas.colorSpace = THREE.SRGBColorSpace;
+  atlas.anisotropy = 4;
   const windTex = loadTexture(windDistUrl);
 
   const dispTex = loadTexture(circleDispUrl);
@@ -87,7 +92,7 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
     side: THREE.DoubleSide,
     depthWrite: true,
     transparent: false,
-    defines: { USE_INSTANCING: '' },
+    defines: { USE_INSTANCING: '', MEADOW_TEXTURE: '' },
     uniforms: {
       uTime: { value: 0 },
       uWindStrength: { value: 1.0 },
@@ -95,16 +100,17 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
       uWindDistMapST: { value: WIND_ST },
       uBladeHeight: { value: 0.85 },
       uBladeHeightRandom: { value: 0.3 },
-      uBladeWidth: { value: 0.1 },
-      uBladeWidthRandom: { value: 0.02 },
+      uBladeWidth: { value: 0.12 },
+      uBladeWidthRandom: { value: 0.025 },
       uBladeForward: { value: 0.38 },
       uBladeCurve: { value: 2.0 },
       uBendRotationRandom: { value: 0.2 },
       uGrassMaskThreshold: { value: 0.08 },
-      uDensityFloor: { value: 0.45 },
+      uDensityFloor: { value: 0.85 },
       uWidthDistanceGain: { value: 0.6 },
       uWindDistortionMap: { value: windTex },
       uGroundTexture: { value: groundTex },
+      uAlbedoMap: { value: atlas },
       uGroundScale: { value: new THREE.Vector2(1 / GROUND_TILE, 1 / GROUND_TILE) },
       uSunDir: { value: new THREE.Vector3(0.45, 0.85, 0.3).normalize() },
       uSunColor: { value: new THREE.Color(1.0, 0.97, 0.92) },
@@ -129,16 +135,17 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
     const crosses: number[] = [];
     const idx: number[] = [];
     const rows = SEGS + 1;
-    for (let c = 0; c < 2; c++) {
-      const base = rows * 2 * c;
+    // Three ridged, curved blades per root; texture adds veins without a flat cutout.
+    for (let c = 0; c < 3; c++) {
+      const base = rows * 3 * c;
       for (let r = 0; r <= SEGS; r++) {
         const t = r / SEGS;
-        verts.push(-1, t, 0); heights.push(t); sides.push(-1); crosses.push(c);
-        verts.push(1, t, 0); heights.push(t); sides.push(1); crosses.push(c);
+        for (const side of [-1, 0, 1]) {
+          verts.push(side, t, 0); heights.push(t); sides.push(side); crosses.push(c);
+        }
       }
-      for (let r = 0; r < SEGS; r++) {
-        const a = base + r * 2;
-        const b = a + 1, cc = a + 2, d = a + 3;
+      for (let r = 0; r < SEGS; r++) for (let column = 0; column < 2; column++) {
+        const a = base + r * 3 + column, b = a + 1, cc = a + 3, d = cc + 1;
         idx.push(a, b, cc, b, d, cc);
       }
     }
@@ -164,6 +171,7 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
 
     const positions = new Float32Array(count * 3);
     const seeds = new Float32Array(count);
+    const meadowScales = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       const col = i % grid;
       const row = (i / grid) | 0;
@@ -173,6 +181,7 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
       positions[i * 3 + 1] = heightAt(gx, gz);
       positions[i * 3 + 2] = gz;
       seeds[i] = jx(i * 3.3) + 0.5;
+      meadowScales[i] = meadowGrassScale(gx, gz);
     }
 
     const chunkGeo = baseGeo.clone();
@@ -186,6 +195,7 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
       mesh.setMatrixAt(i, dummy.matrix);
     }
     mesh.instanceMatrix.needsUpdate = true;
+    chunkGeo.setAttribute('aMeadowScale', new THREE.InstancedBufferAttribute(meadowScales, 1));
     chunkGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
     return mesh;
   }
@@ -209,7 +219,7 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
         const dist = Math.max(Math.abs(dx), Math.abs(dz));
         const k = ccx + dx + ',' + (ccz + dz);
         wanted.add(k);
-        if (!chunks.has(k)) missing.push({ cx: ccx + dx, cz: ccz + dz, key: k, dist });
+        if (chunks.get(k)?.grid !== gridFor(dist, density)) missing.push({ cx: ccx + dx, cz: ccz + dz, key: k, dist });
       }
     }
     // Building every missing chunk at once stalls for seconds after a view-distance
@@ -218,6 +228,12 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
     for (const m of missing.slice(0, BUILD_BUDGET)) {
       const grid = gridFor(m.dist, density);
       const mesh = buildMesh(m.cx, m.cz, grid);
+      const previous = chunks.get(m.key);
+      if (previous) {
+        group.remove(previous.mesh);
+        previous.mesh.dispose();
+        previous.mesh.geometry.dispose();
+      }
       chunks.set(m.key, { mesh, grid });
       group.add(mesh);
     }
@@ -265,6 +281,7 @@ export function createGrass(heightAt: HeightFn, shadowUniforms: ShadowFieldUnifo
       mat.dispose();
       baseGeo.dispose();
       groundTex.dispose();
+      atlas.dispose();
       windTex.dispose();
       dispTex.dispose();
       dispTex2.dispose();

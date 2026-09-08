@@ -28,7 +28,7 @@ export interface Player {
   position: () => THREE.Vector3;
 }
 
-const EYE_STAND = 1.65;
+const EYE_STAND = 3.4;
 const EYE_CROUCH = 1.0;
 const EYE_SLIDE = 0.72;
 const EYE_SMOOTH = 0.085;

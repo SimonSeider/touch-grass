@@ -9,10 +9,14 @@ Because apparently going outside is too much work, so we made a browser-based si
 ## Features
 
 * Procedural grass and terrain
+* Clustered wildflowers, clover patches, and tall seed-head grasses with wind and day/night lighting
 * Real-time local day and night cycle with warm twilight, moonlight, stars, mist, fireflies, and nighttime insect ambience
 * Volumetric fog
 * Wind and grass movement
-* Particle effects
+* Textured 3D grass blades, wildflowers, clover, and seed heads with wind sway and leaf flutter
+* Detailed butterfly wings and meadow groundcover
+* Dynamic Sound Effects
+* Particle effects, drifting meadow seeds, and daytime butterflies around flower patches
 * Custom GLSL shaders
 * exposure adaptation
 * Chunk-based terrain generation

@@ -1,204 +1,190 @@
 import musicUrl from './audio/Music/Gallery_Six.mp3';
-import ambientUrl from './audio/sounds/ambient.mp3';
 import walkingUrl from './audio/sounds/walking.mp3';
 import nightUrl from './audio/sounds/night-crickets.mp3';
+import birdsUrl from './audio/sounds/isolated-blackbird.mp3';
+import beesUrl from './audio/sounds/single-bee.mp3';
+import windUrl from './audio/sounds/clean-wind.mp3';
+import { sampleSoundHabitat, soundscapeMix, type SoundEnvironment } from './soundscape';
 
 export interface AudioLayer {
   start: (transitionSec: number) => void;
-  update: (dt: number, walking: boolean) => void;
+  update: (dt: number, walking: boolean, environment: SoundEnvironment) => void;
   setMasterVolume: (v: number) => void;
   setMusicVolume: (v: number) => void;
   setSfxVolume: (v: number) => void;
   setMuted: (muted: boolean) => void;
-  setNight: (amount: number) => void;
+  dispose: () => void;
 }
 
-type Ctx = AudioContext;
+const TRACKS = {
+  music: { url: musicUrl, volume: 0.5 },
+  walk: { url: walkingUrl, volume: 0.32 },
+  night: { url: nightUrl, volume: 0.32 },
+  birds: { url: birdsUrl, volume: 0.55 },
+  bees: { url: beesUrl, volume: 0.16 },
+  wind: { url: windUrl, volume: 0.4 },
+};
+type TrackName = keyof typeof TRACKS;
+type Track = { el: HTMLAudioElement; gain?: GainNode; panner?: StereoPannerNode; pending: boolean; target: number };
+const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
 export function createAudio(): AudioLayer {
-  let started = false;
-  let night = 0;
-  let walking: HTMLAudioElement | null = null;
+  let started = false, disposed = false, walkingActive = false;
+  let masterVol = 1, musicVol = 1, sfxVol = 1, muted = false;
+  let ctx: AudioContext | null = null;
+  let master: GainNode | null = null;
+  let habitat: ReturnType<typeof sampleSoundHabitat> | null = null;
+  let habitatAge = 1, sampledX = Infinity, sampledZ = Infinity;
+  let fadeAge = 0, fadeDuration = 1.6;
+  let beeCooldown = 8;
+  let mix = { ambient: 0, night: 0, birds: 0, bees: 0, wind: 0, beePan: 0 };
+  const tracks = new Map<TrackName, Track>();
 
-  let masterVol = 1;
-  let musicVol = 1;
-  let sfxVol = 1;
-  let muted = false;
-  const trackGains = new Map<string, GainNode | HTMLAudioElement>();
-
-  const BASE_VOLUME: Record<string, number> = { music: 0.5, ambient: 0.55, walk: 0.32, night: 0.32 };
-
-  function busVolume(name: string): number {
-    if (muted) return 0;
-    return BASE_VOLUME[name] * masterVol * (name === 'music' ? musicVol : sfxVol)
-      * (name === 'ambient' ? 1 - night : name === 'night' ? night : 1);
+  function volume(name: TrackName) {
+    return muted ? 0 : TRACKS[name].volume * masterVol * (name === 'music' ? musicVol : sfxVol)
+      * (name === 'music' || name === 'walk' ? 1 : mix[name]);
   }
 
   function applyGains() {
-    for (const name of Object.keys(BASE_VOLUME)) {
-      const g = trackGains.get(name);
-      if (!g) continue;
-      const v = busVolume(name);
-      if (g instanceof HTMLAudioElement) g.volume = Math.max(0, Math.min(1, v));
-      else {
-        const now = g.context.currentTime;
-        g.gain.cancelScheduledValues(now);
-        if (muted) g.gain.setValueAtTime(0, now);
-        else g.gain.setTargetAtTime(v, now, 0.15);
+    for (const [name, track] of tracks) {
+      const target = volume(name);
+      if (track.gain && Math.abs(track.target - target) > 0.0005) {
+        track.gain.gain.setTargetAtTime(target, track.gain.context.currentTime, 0.65);
       }
+      track.target = target;
+      if (muted) track.el.volume = track.gain ? 1 : 0;
     }
   }
 
-  function makeImpulse(ctx: Ctx, seconds: number, decay: number): AudioBuffer {
-    const rate = ctx.sampleRate;
-    const len = Math.floor(rate * seconds);
-    const buf = ctx.createBuffer(2, len, rate);
-    for (let ch = 0; ch < 2; ch++) {
-      const data = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
-      }
-    }
-    return buf;
+  function play(track: Track) {
+    if (track.pending || !track.el.paused) return;
+    track.pending = true;
+    void track.el.play().catch(() => {
+      // A later user gesture retries playback if the browser blocked it.
+    }).finally(() => { track.pending = false; });
   }
 
-  function makeSoundEl(url: string, baseVolume: number, loop: boolean): HTMLAudioElement {
-    const el = new Audio(url);
-    el.loop = loop;
-    el.preload = 'auto';
-    el.style.display = 'none';
-    document.body.appendChild(el);
-    void baseVolume;
-    return el;
+  function resumeOnGesture() {
+    if (!started || disposed) return;
+    if (ctx?.state === 'suspended') void ctx.resume().catch(() => {});
+    for (const [name, track] of tracks) if (name !== 'bees' && (name !== 'walk' || walkingActive)) play(track);
   }
+  window.addEventListener('pointerdown', resumeOnGesture);
+  window.addEventListener('keydown', resumeOnGesture);
 
-  function setupWebAudio(transitionSec: number): boolean {
-    const AC = (window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext) as
-      | typeof AudioContext
-      | undefined;
-    if (!AC) return false;
+  function setupWebAudio() {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
     try {
-      const ctx = new AC() as Ctx;
-      if (ctx.state === 'suspended') void ctx.resume();
-
-      const now = ctx.currentTime;
-      const duration = Math.max(0.5, transitionSec);
-
-      const master = ctx.createGain();
-      master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(1, now + duration);
-      master.connect(ctx.destination);
-
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = muted ? 0 : 1; master.connect(ctx.destination);
+      const entrance = ctx.createGain(); entrance.gain.value = 0;
+      entrance.gain.linearRampToValueAtTime(1, ctx.currentTime + fadeDuration); entrance.connect(master);
       const convolver = ctx.createConvolver();
-      convolver.buffer = makeImpulse(ctx, 2.4, 3.0);
-      convolver.normalize = true;
-
-      const dry = ctx.createGain();
-      const wet = ctx.createGain();
-      dry.gain.setValueAtTime(0.25, now);
-      dry.gain.linearRampToValueAtTime(1, now + duration);
-      wet.gain.setValueAtTime(1.0, now);
-      wet.gain.linearRampToValueAtTime(0.08, now + duration);
-      dry.connect(master);
-      wet.connect(master);
-
-      const sounds: Array<{ el: HTMLAudioElement; vol: number; bus: 'music' | 'sfx'; name: string }> = [
-        { el: makeSoundEl(musicUrl, 0.5, true), vol: 0.5, bus: 'music', name: 'music' },
-        { el: makeSoundEl(ambientUrl, 0.55, true), vol: 0.55, bus: 'sfx', name: 'ambient' },
-        { el: makeSoundEl(walkingUrl, 0.32, true), vol: 0.32, bus: 'sfx', name: 'walk' },
-        { el: makeSoundEl(nightUrl, 0.32, true), vol: 0.32, bus: 'sfx', name: 'night' },
-      ];
-
-      sounds.forEach(({ el, vol, bus, name }) => {
-        el.volume = 1;
-        const src = ctx.createMediaElementSource(el);
-        const g = ctx.createGain();
-        g.gain.value = busVolume(name);
-        trackGains.set(name, g);
-        src.connect(g);
-        g.connect(dry);
-        g.connect(convolver);
-      });
-      convolver.connect(wet);
-
-      walking = sounds[2].el;
-      applyGains();
-      sounds[0].el.play().catch(() => { });
-      sounds[1].el.play().catch(() => { });
-      sounds[3].el.play().catch(() => { });
-      return true;
+      const impulse = ctx.createBuffer(2, Math.floor(ctx.sampleRate * 2.4), ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = impulse.getChannelData(ch);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 3);
+      }
+      convolver.buffer = impulse;
+      const wet = ctx.createGain(); wet.gain.value = 0.08; convolver.connect(wet); wet.connect(entrance);
+      for (const [name, track] of tracks) {
+        const source = ctx.createMediaElementSource(track.el);
+        track.gain = ctx.createGain(); track.gain.gain.value = volume(name); track.target = volume(name);
+        source.connect(track.gain);
+        if (name === 'bees' && typeof ctx.createStereoPanner === 'function') {
+          track.panner = ctx.createStereoPanner(); track.panner.pan.value = mix.beePan;
+          track.gain.connect(track.panner); track.panner.connect(entrance);
+        } else { track.gain.connect(entrance); }
+        if (name !== 'bees') track.gain.connect(convolver);
+      }
+      void ctx.resume().catch(() => {});
     } catch {
-      return false;
+      if (ctx) void ctx.close().catch(() => {});
+      ctx = null; master = null;
+      // Media elements attached to a failed context cannot be reused for fallback.
+      for (const [name, track] of tracks) {
+        track.el.pause(); track.el.removeAttribute('src'); track.el.load();
+        track.el = new Audio(TRACKS[name].url); track.el.loop = name !== 'bees'; track.el.preload = 'auto';
+        track.gain = undefined; track.panner = undefined;
+      }
     }
-  }
-
-  function setupFallback(transitionSec: number) {
-    const fadeIn = (el: HTMLAudioElement, name: string) => {
-      el.volume = 0;
-      el.play().catch(() => { });
-      const start = performance.now();
-      const step = () => {
-        const p = Math.min(1, (performance.now() - start) / (transitionSec * 1000));
-        el.volume = Math.max(0, Math.min(1, busVolume(name) * p));
-        if (p < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    };
-    const music = makeSoundEl(musicUrl, 0.5, true);
-    const ambient = makeSoundEl(ambientUrl, 0.55, true);
-    const nightAmbient = makeSoundEl(nightUrl, 0.32, true);
-    walking = makeSoundEl(walkingUrl, 0.32, true);
-    trackGains.set('music', music);
-    trackGains.set('ambient', ambient);
-    trackGains.set('walk', walking);
-    trackGains.set('night', nightAmbient);
-    applyGains();
-    fadeIn(music, 'music');
-    fadeIn(ambient, 'ambient');
-    fadeIn(nightAmbient, 'night');
   }
 
   function start(transitionSec = 1.6) {
-    if (started) return;
-    started = true;
-    if (!setupWebAudio(transitionSec)) setupFallback(transitionSec);
-  }
-
-  function update(_dt: number, walkingActive: boolean) {
-    if (!started || !walking) return;
-    if (walkingActive && walking.paused) {
-      walking.play().catch(() => { });
-    } else if (!walkingActive && !walking.paused) {
-      walking.pause();
+    if (started || disposed) return;
+    started = true; fadeDuration = Math.max(0.1, transitionSec);
+    for (const name of Object.keys(TRACKS) as TrackName[]) {
+      const el = new Audio(TRACKS[name].url); el.loop = name !== 'bees'; el.preload = 'auto';
+      tracks.set(name, { el, pending: false, target: volume(name) });
+    }
+    setupWebAudio();
+    for (const [name, track] of tracks) {
+      track.el.volume = ctx ? 1 : 0;
+      if (name !== 'walk' && name !== 'bees') play(track);
     }
   }
 
-  function setMasterVolume(v: number) {
-    masterVol = Math.max(0, Math.min(1, v));
+  function update(dt: number, isWalking: boolean, environment: SoundEnvironment) {
+    if (disposed) return;
+    walkingActive = isWalking;
+    habitatAge += dt;
+    if (!habitat || habitatAge >= 0.2 || Math.hypot(environment.x - sampledX, environment.z - sampledZ) > 3) {
+      habitat = sampleSoundHabitat(environment.x, environment.z);
+      sampledX = environment.x; sampledZ = environment.z; habitatAge = 0;
+    }
+    mix = soundscapeMix(environment, habitat);
+    if (!started) return;
     applyGains();
+    const beePan = tracks.get('bees')?.panner;
+    if (beePan) beePan.pan.setTargetAtTime(mix.beePan, beePan.context.currentTime, 0.3);
+    fadeAge += dt;
+    if (!ctx) {
+      for (const track of tracks.values()) {
+        const target = track.target * Math.min(1, fadeAge / fadeDuration);
+        track.el.volume = muted ? 0 : clamp(track.el.volume + (target - track.el.volume) * (1 - Math.exp(-dt / 0.65)));
+      }
+    }
+    const bee = tracks.get('bees');
+    if (bee) {
+      const audible = !muted && masterVol > 0 && sfxVol > 0 && mix.bees > 0.12;
+      if (audible) beeCooldown = Math.max(0, beeCooldown - dt);
+      if (audible && beeCooldown === 0 && bee.el.paused && !bee.pending) {
+        bee.el.currentTime = 0;
+        play(bee);
+        beeCooldown = 22 + Math.random() * 18;
+      }
+      // End an encounter after its fade when the player leaves, mutes, or night falls.
+      if ((!audible && mix.bees < 0.01) || muted || masterVol === 0 || sfxVol === 0) {
+        bee.el.pause();
+        beeCooldown = Math.max(beeCooldown, 8);
+      }
+    }
+    const walk = tracks.get('walk');
+    if (walk) {
+      if (walkingActive) play(walk);
+      else if (!walk.el.paused) walk.el.pause();
+    }
   }
 
-  function setMusicVolume(v: number) {
-    musicVol = Math.max(0, Math.min(1, v));
-    applyGains();
-  }
-
-  function setSfxVolume(v: number) {
-    sfxVol = Math.max(0, Math.min(1, v));
-    applyGains();
-  }
-
-  function setMuted(value: boolean) {
-    muted = value;
-    applyGains();
-  }
-
-  function setNight(amount: number) {
-    if (Math.abs(amount - night) < 0.0001) return;
-    night = Math.max(0, Math.min(1, amount));
-    applyGains();
-  }
-
-  return { start, update, setMasterVolume, setMusicVolume, setSfxVolume, setMuted, setNight };
+  return {
+    start, update,
+    setMasterVolume(v) { masterVol = clamp(v); applyGains(); },
+    setMusicVolume(v) { musicVol = clamp(v); applyGains(); },
+    setSfxVolume(v) { sfxVol = clamp(v); applyGains(); },
+    setMuted(value) {
+      muted = value;
+      if (master && ctx) {
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.setTargetAtTime(muted ? 0 : 1, ctx.currentTime, 0.02);
+      }
+      applyGains();
+    },
+    dispose() {
+      disposed = true;
+      window.removeEventListener('pointerdown', resumeOnGesture); window.removeEventListener('keydown', resumeOnGesture);
+      for (const track of tracks.values()) { track.el.pause(); track.el.removeAttribute('src'); track.el.load(); }
+      tracks.clear(); if (ctx) void ctx.close().catch(() => {});
+    },
+  };
 }

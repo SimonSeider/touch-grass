@@ -1,0 +1,35 @@
+attribute vec3 color;
+attribute float aWing;
+varying vec2 vPlantUv;
+uniform float uTime;
+uniform float uWindStrength;
+uniform vec2 uWindFrequency;
+uniform vec4 uWindDistMapST;
+uniform sampler2D uWindDistortionMap;
+varying float vHeight;
+varying float vMask;
+varying vec3 vGroundColor;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+varying float vSeed;
+void main() {
+  vPlantUv = uv;
+  vec3 base = instanceMatrix[3].xyz;
+  float phase = dot(base.xz, vec2(0.17, 0.23));
+  float flap = (0.35 + 0.65 * sin(uTime * 28.0 + phase)) * aWing;
+  mat3 fold = mat3(cos(flap), sin(flap), 0.0, -sin(flap), cos(flap), 0.0, 0.0, 0.0, 1.0);
+  vec3 p = (instanceMatrix * vec4(fold * position, 1.0)).xyz;
+  vec2 uv = base.xz * uWindDistMapST.xy + uWindDistMapST.zw + uWindFrequency * uTime;
+  vec2 wind = (texture2D(uWindDistortionMap, uv).xy * 2.0 - 1.0) * uWindStrength;
+  float h = max(0.0, p.y - base.y);
+  p.xz += wind * h * h * 0.38;
+  vec3 n = mat3(instanceMatrix) * fold * normal;
+  n.y -= dot(wind * (0.76 * h), n.xz);
+  vNormal = normalize(n);
+  vWorldPos = p;
+  vGroundColor = color;
+  vHeight = 1.0;
+  vSeed = fract(sin(dot(base.xz, vec2(12.9898,78.233))) * 43758.5453);
+  vMask = 1.0;
+  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}

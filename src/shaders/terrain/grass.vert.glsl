@@ -2,6 +2,7 @@ attribute float aSide;
 attribute float aHeight;
 attribute float aCross;
 attribute float aSeed;
+attribute float aMeadowScale;
 
 uniform float uTime;
 uniform float uWindStrength;
@@ -23,6 +24,7 @@ uniform sampler2D uWindDistortionMap;
 uniform sampler2D uGroundTexture;
 uniform vec2 uGroundScale;
 
+varying vec2 vPlantUv;
 varying float vHeight;
 varying float vMask;
 varying vec3 vGroundColor;
@@ -49,7 +51,7 @@ mat3 rotateAxis(vec3 axis, float angle) {
 void main() {
 
   vec3 basePos = instanceMatrix[3].xyz;
-  float seed = aSeed;
+  float seed = aSeed + aCross * 0.173;
 
   float facing = rand(seed) * 6.2831853;
   float bend = (rand(seed + 1.0) * 2.0 - 1.0) * uBendRotationRandom * 3.14159265 * 0.5;
@@ -63,7 +65,7 @@ void main() {
   float alive = step(rand(seed + 5.0), density);
 
   float lush = mix(0.78, 1.0, ground.a);
-  float heightFull = (uBladeHeight + hRand * uBladeHeightRandom) * lush;
+  float heightFull = (uBladeHeight + hRand * uBladeHeightRandom) * lush * aMeadowScale;
 
   float camDist = distance(basePos, cameraPosition);
   float widthLod = 1.0 + smoothstep(10.0, 85.0, camDist) * uWidthDistanceGain;
@@ -73,15 +75,16 @@ void main() {
   float width = widthFull * alive;
 
   float t = aHeight;
-  vec3 p = vec3(aSide * (1.0 - t) * width, t * height, pow(t, uBladeCurve) * forward);
+  float ridge = (1.0 - abs(aSide)) * sin(t * 3.14159265) * width * 0.18;
+  vec3 p = vec3(aSide * (1.0 - t) * width, t * height, pow(t, uBladeCurve) * forward + ridge);
 
   float fslope = uBladeCurve * pow(max(t, 1e-3), uBladeCurve - 1.0) * forward;
-  vec3 n = vec3(0.0, -fslope, heightFull);
+  vec3 n = vec3(aSide * sin(t * 3.14159265) * heightFull * 0.18, -fslope, heightFull);
 
-  if (aCross > 0.5) {
-    p = vec3(p.z, p.y, -p.x);
-    n = vec3(n.z, n.y, -n.x);
-  }
+  float bladeAngle = aCross * 2.0943951;
+  mat3 bladeRotation = rotateAxis(vec3(0.0, 1.0, 0.0), bladeAngle);
+  p = bladeRotation * p;
+  n = bladeRotation * n;
 
   vec2 windUv = basePos.xz * uWindDistMapST.xy + uWindDistMapST.zw + uWindFrequency * uTime;
   vec2 windSample = (texture2D(uWindDistortionMap, windUv).xy * 2.0 - 1.0) * uWindStrength;
@@ -95,6 +98,7 @@ void main() {
 
   vec3 worldP = basePos + m * p;
 
+  vPlantUv = vec2((0.06 + (aSide * 0.5 + 0.5) * 0.88) / 3.0, (0.06 + t * 0.88) / 2.0);
   vHeight = t;
   vMask = alive;
   vSeed = seed;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import groundCoverUrl from './textures/meadow-ground.png?url';
 import { resolveIncludes } from './shaderlib';
 import toonVert from './shaders/terrain/toon.vert.glsl?raw';
 import toonFrag from './shaders/terrain/toon.frag.glsl?raw';
@@ -132,6 +133,10 @@ export function createTerrain(): TerrainLayer {
     uHeightRangeMax: { value: HM_HEIGHT_MAX },
   };
 
+  const groundCover = new THREE.TextureLoader().load(groundCoverUrl);
+  groundCover.colorSpace = THREE.SRGBColorSpace;
+  groundCover.wrapS = groundCover.wrapT = THREE.RepeatWrapping;
+  groundCover.anisotropy = 4;
   const mat = new THREE.ShaderMaterial({
     vertexColors: true,
     uniforms: {
@@ -141,6 +146,7 @@ export function createTerrain(): TerrainLayer {
 
       uSunRadiance: { value: 3.0 },
       uRim: { value: 0.30 },
+      uGroundCover: { value: groundCover },
 
       ...iblUniforms,
       ...shadowUniforms,
