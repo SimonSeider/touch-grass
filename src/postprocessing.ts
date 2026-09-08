@@ -343,6 +343,14 @@ export async function createPostprocessing(
       gradePass.uniforms.uExposure.value = sceneExposureFromEv100(ev100FromCamera(aperture, shutterSpeed, ISO) - compensation);
     }
 
+    // Cap automatic brightening so the meter cannot turn midnight into daytime.
+    if (autoExposure || autoISO) {
+      const daylight = smoothstep(-0.22, 0.02, cloudCfg.sunDir.y);
+      gradePass.uniforms.uExposure.value = Math.min(
+        gradePass.uniforms.uExposure.value as number, 1.6 + daylight * 30,
+      );
+    }
+
     const sensorLight = (shutterSpeed / (aperture * aperture));
     const ISOGain = ISO / 100.0;
 
@@ -378,7 +386,7 @@ export async function createPostprocessing(
     sunScreen.set(clip.x * 0.5 + 0.5, clip.y * 0.5 + 0.5);
     const edge = Math.max(Math.abs(clip.x), Math.abs(clip.y));
     lensMat.uniforms.uSunScreen.value = sunScreen;
-    lensMat.uniforms.uSunVisible.value = inFront ? 1 - smoothstep(1.0, 1.6, edge) : 0;
+    lensMat.uniforms.uSunVisible.value = inFront ? (1 - smoothstep(1.0, 1.6, edge)) * cloudCfg.sunEnergy : 0;
 
     composer.render();
   };

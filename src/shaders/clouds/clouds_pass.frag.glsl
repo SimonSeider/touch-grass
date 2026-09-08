@@ -231,7 +231,7 @@ vec4 traceClouds(vec3 rayDir, vec3 startPos, float rayLength, int nSteps, out fl
 
   vec3 sunTint = skySunTint(sunDir.y);
   float sunE = skySunEnergy(sunDir.y);
-  vec3 sunRadiance = sunColor * sunTint * mix(0.06, 1.15, sunE);
+  vec3 sunRadiance = sunColor * sunTint * sunE * 1.15;
 
   vec3 ambTop = skyAmbientTop(sunDir) * 0.75;
   vec3 ambBottom = mix(skyAmbientGround(sunDir), ambTop, 0.35) * 0.75;

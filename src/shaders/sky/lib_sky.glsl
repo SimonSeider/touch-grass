@@ -23,16 +23,26 @@ float skySunEnergy(float sunY) {
   return smoothstep(-0.04, 0.20, sunY);
 }
 
+float skyNight(vec3 sunDir) {
+  return 1.0 - smoothstep(-0.22, 0.02, sunDir.y);
+}
+
+vec3 skyMoonLight(vec3 normal, vec3 sunDir) {
+  return vec3(0.055, 0.085, 0.15) * skyNight(sunDir)
+    * max(dot(normal, -sunDir), 0.0);
+}
+
 vec3 skyAmbientTop(vec3 sunDir) {
   float h = skySat(sunDir.y);
   vec3 day  = vec3(0.30, 0.44, 0.72);
   vec3 dusk = vec3(0.22, 0.22, 0.34);
-  return mix(dusk, day, smoothstep(0.02, 0.30, h)) * mix(0.35, 1.0, skySunEnergy(sunDir.y));
+  vec3 daylight = mix(dusk, day, smoothstep(0.02, 0.30, h)) * mix(0.35, 1.0, skySunEnergy(sunDir.y));
+  return mix(daylight, vec3(0.012, 0.022, 0.048), skyNight(sunDir));
 }
 
 vec3 skyAmbientGround(vec3 sunDir) {
   vec3 base = vec3(0.16, 0.19, 0.12);
-  return base * mix(0.25, 1.0, skySunEnergy(sunDir.y)) * mix(vec3(1.0), skySunTint(sunDir.y), 0.5);
+  return mix(base * mix(0.25, 1.0, skySunEnergy(sunDir.y)) * mix(vec3(1.0), skySunTint(sunDir.y), 0.5), vec3(0.004, 0.007, 0.012), skyNight(sunDir));
 }
 
 vec3 skyRadiance(vec3 dir, vec3 sunDir, float haze) {
@@ -63,7 +73,11 @@ vec3 skyRadiance(vec3 dir, vec3 sunDir, float haze) {
 
   col *= mix(1.0, skyRayleighPhase(c) * 0.55 + 0.72, 0.5);
 
-  return max(col, vec3(0.0));
+  vec3 nightSky = mix(vec3(0.018, 0.028, 0.060), vec3(0.002, 0.005, 0.018), t);
+  nightSky = mix(nightSky, vec3(0.003, 0.005, 0.008), below);
+  float moonGlow = pow(max(dot(d, -sunDir), 0.0), 180.0);
+  nightSky += vec3(0.025, 0.040, 0.075) * moonGlow;
+  return max(mix(col, nightSky, skyNight(sunDir)), vec3(0.0));
 }
 
 vec3 skyFogColor(vec3 viewDir, vec3 sunDir) {

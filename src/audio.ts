@@ -1,6 +1,7 @@
 import musicUrl from './audio/Music/Gallery_Six.mp3';
 import ambientUrl from './audio/sounds/ambient.mp3';
 import walkingUrl from './audio/sounds/walking.mp3';
+import nightUrl from './audio/sounds/night-crickets.mp3';
 
 export interface AudioLayer {
   start: (transitionSec: number) => void;
@@ -9,12 +10,14 @@ export interface AudioLayer {
   setMusicVolume: (v: number) => void;
   setSfxVolume: (v: number) => void;
   setMuted: (muted: boolean) => void;
+  setNight: (amount: number) => void;
 }
 
 type Ctx = AudioContext;
 
 export function createAudio(): AudioLayer {
   let started = false;
+  let night = 0;
   let walking: HTMLAudioElement | null = null;
 
   let masterVol = 1;
@@ -23,11 +26,12 @@ export function createAudio(): AudioLayer {
   let muted = false;
   const trackGains = new Map<string, GainNode | HTMLAudioElement>();
 
-  const BASE_VOLUME: Record<string, number> = { music: 0.5, ambient: 0.55, walk: 0.32 };
+  const BASE_VOLUME: Record<string, number> = { music: 0.5, ambient: 0.55, walk: 0.32, night: 0.32 };
 
   function busVolume(name: string): number {
     if (muted) return 0;
-    return BASE_VOLUME[name] * masterVol * (name === 'music' ? musicVol : sfxVol);
+    return BASE_VOLUME[name] * masterVol * (name === 'music' ? musicVol : sfxVol)
+      * (name === 'ambient' ? 1 - night : name === 'night' ? night : 1);
   }
 
   function applyGains() {
@@ -35,8 +39,13 @@ export function createAudio(): AudioLayer {
       const g = trackGains.get(name);
       if (!g) continue;
       const v = busVolume(name);
-      if (g instanceof GainNode) g.gain.value = v;
-      else g.volume = Math.max(0, Math.min(1, v));
+      if (g instanceof HTMLAudioElement) g.volume = Math.max(0, Math.min(1, v));
+      else {
+        const now = g.context.currentTime;
+        g.gain.cancelScheduledValues(now);
+        if (muted) g.gain.setValueAtTime(0, now);
+        else g.gain.setTargetAtTime(v, now, 0.15);
+      }
     }
   }
 
@@ -98,13 +107,14 @@ export function createAudio(): AudioLayer {
         { el: makeSoundEl(musicUrl, 0.5, true), vol: 0.5, bus: 'music', name: 'music' },
         { el: makeSoundEl(ambientUrl, 0.55, true), vol: 0.55, bus: 'sfx', name: 'ambient' },
         { el: makeSoundEl(walkingUrl, 0.32, true), vol: 0.32, bus: 'sfx', name: 'walk' },
+        { el: makeSoundEl(nightUrl, 0.32, true), vol: 0.32, bus: 'sfx', name: 'night' },
       ];
 
       sounds.forEach(({ el, vol, bus, name }) => {
         el.volume = 1;
         const src = ctx.createMediaElementSource(el);
         const g = ctx.createGain();
-        g.gain.value = vol;
+        g.gain.value = busVolume(name);
         trackGains.set(name, g);
         src.connect(g);
         g.connect(dry);
@@ -116,6 +126,7 @@ export function createAudio(): AudioLayer {
       applyGains();
       sounds[0].el.play().catch(() => { });
       sounds[1].el.play().catch(() => { });
+      sounds[3].el.play().catch(() => { });
       return true;
     } catch {
       return false;
@@ -136,13 +147,16 @@ export function createAudio(): AudioLayer {
     };
     const music = makeSoundEl(musicUrl, 0.5, true);
     const ambient = makeSoundEl(ambientUrl, 0.55, true);
+    const nightAmbient = makeSoundEl(nightUrl, 0.32, true);
     walking = makeSoundEl(walkingUrl, 0.32, true);
     trackGains.set('music', music);
     trackGains.set('ambient', ambient);
     trackGains.set('walk', walking);
+    trackGains.set('night', nightAmbient);
     applyGains();
     fadeIn(music, 'music');
     fadeIn(ambient, 'ambient');
+    fadeIn(nightAmbient, 'night');
   }
 
   function start(transitionSec = 1.6) {
@@ -180,5 +194,11 @@ export function createAudio(): AudioLayer {
     applyGains();
   }
 
-  return { start, update, setMasterVolume, setMusicVolume, setSfxVolume, setMuted };
+  function setNight(amount: number) {
+    if (Math.abs(amount - night) < 0.0001) return;
+    night = Math.max(0, Math.min(1, amount));
+    applyGains();
+  }
+
+  return { start, update, setMasterVolume, setMusicVolume, setSfxVolume, setMuted, setNight };
 }

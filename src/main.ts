@@ -7,6 +7,7 @@ import { createParticles } from './particles';
 import { createAudio } from './audio';
 import { createPostprocessing, type PostSetup } from './postprocessing';
 import { sunTint, sunEnergy } from './skymath';
+import { timeOfDay, nightAmount } from './daynight';
 import { createSkyProbe, iblUniforms } from './skyprobe';
 import { RENDER_PARAMS } from './rendermode';
 import { createUi } from './ui';
@@ -23,7 +24,6 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 4000);
 
 const SUN_DIST = 500;
-const SUN_SPEED = 0.025;
 const sun = new THREE.DirectionalLight(0xfff2d0, 3.2);
 scene.add(sun);
 scene.add(sun.target);
@@ -189,7 +189,7 @@ window.addEventListener('resize', () => {
 });
 
 const clock = new THREE.Clock();
-let sunTime = 0;
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -199,12 +199,23 @@ function animate() {
   audio.update(dt, player.isWalking());
   ui.tick(dt);
 
-  if (!settings.debug.freezeSun) sunTime += dt;
-  const az = sunTime * SUN_SPEED;
-  const el = settings.debug.freezeSun
-    ? settings.debug.sunElevation
-    : 0.15 + (0.5 + 0.5 * Math.sin(sunTime * SUN_SPEED * 1.4)) * 0.35;
-  sunDir.set(Math.cos(az), Math.sin(el), Math.sin(az) * 0.85).normalize();
+  const localTime = timeOfDay();
+  if (settings.debug.freezeSun) {
+    const el = settings.debug.sunElevation;
+    sunDir.set(Math.cos(el), Math.sin(el), 0);
+  } else {
+    sunDir.set(localTime.x, localTime.y, localTime.z);
+  }
+  const night = nightAmount(sunDir.y);
+  audio.setNight(night);
+  sky.setHaze(RENDER_PARAMS.haze * (1 - night * 0.4));
+  post?.setParams({
+    ...RENDER_PARAMS,
+    fogDensity: RENDER_PARAMS.fogDensity * (1 + night * 0.35),
+    fogHeightFalloff: RENDER_PARAMS.fogHeightFalloff * (1 + night),
+    saturation: RENDER_PARAMS.saturation * (1 - night * 0.18),
+    warmth: RENDER_PARAMS.warmth - night * 0.24,
+  });
   sun.position.copy(sunDir).multiplyScalar(SUN_DIST);
   sun.target.position.set(0, 0, 0);
 

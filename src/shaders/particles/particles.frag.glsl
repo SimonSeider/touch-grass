@@ -37,8 +37,13 @@ void main() {
 
   float tw = 0.72 + 0.28 * sin(uTime * (1.1 + vSeed * 2.3) + vSeed * 43.0);
 
-  float coverage = (core * 0.5 + halo * 0.5) * vFade * tw * uSunEnergy * visible;
+  float night = 1.0 - smoothstep(-0.22, 0.02, uSunDir.y);
+  float pulse = pow(0.5 + 0.5 * sin(uTime * 1.7 + vSeed * 83.0), 5.0);
+  float activity = mix(uSunEnergy, step(0.965, vSeed) * pulse, night);
+  float coverage = (core * 0.5 + halo * 0.5) * vFade * tw * activity * visible;
   vec3 emission = mix(uSunColor, vec3(1.0), forward * 0.5) * glint * uRadiance;
+
+  emission = mix(emission, vec3(0.65, 1.0, 0.12) * 2.0, night);
 
   gl_FragColor = vec4(emission * coverage, coverage);
 }

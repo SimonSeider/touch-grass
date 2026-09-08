@@ -67,7 +67,7 @@ void main() {
   vec3 l = normalize(uSunDir);
 
   float jitter = fract(sin(dot(vWorldPos.xz, vec2(12.9898, 78.233))) * 43758.5453);
-  float shadow = terrainShadow(vWorldPos, l, jitter);
+  float shadow = uSunEnergy > 0.001 ? terrainShadow(vWorldPos, l, jitter) : 0.0;
 
   float ndl = lightWrapped(n, l, 0.32);
 
@@ -81,7 +81,8 @@ void main() {
   vec3 base = max(vColor, 0.0);
 
   vec3 sunLight = uSunColor * uSunEnergy * uSunRadiance;
-  vec3 direct = sunLight * ndl * shadow;
+  float moonShadow = skyNight(uSunDir) > 0.001 ? terrainShadow(vWorldPos, -l, jitter) : 0.0;
+  vec3 direct = sunLight * ndl * shadow + skyMoonLight(n, uSunDir) * moonShadow;
 
   vec3 bounce = base * sunLight * 0.16 * lightSat(0.35 + 0.65 * shadow) * ao;
 

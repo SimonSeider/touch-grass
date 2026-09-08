@@ -50,6 +50,7 @@ const SLIDE_FRICTION = 1.5;
 const SLIDE_STEER = 4.5;
 const SLIDE_COOLDOWN = 0.5;
 const MOMENTUM_DRAG = 0.35;
+const AIR_STRAFE_CAP = 0.9;
 
 const COYOTE_TIME = 0.12;
 const JUMP_BUFFER = 0.12;
@@ -355,7 +356,8 @@ export function createPlayer(camera: THREE.PerspectiveCamera, heightAt: HeightFn
       }
     } else if (moving) {
       const wishSpeed = running ? tuning.runSpeed : tuning.walkSpeed;
-      accelerate(wishSpeed, tuning.acceleration * wishSpeed * tuning.airControl, dt);
+      const target = tuning.momentum ? Math.min(wishSpeed, AIR_STRAFE_CAP) : wishSpeed;
+      accelerate(target, tuning.acceleration * wishSpeed * tuning.airControl, dt);
     }
 
     if (tuning.momentum && keys.space) jumpQueued = true;

@@ -66,7 +66,7 @@ void main() {
   if (dot(n, v) < 0.0) n = -n;
 
   vec3 l = normalize(uSunDir);
-  float shadow = terrainShadow(vWorldPos, l);
+  float shadow = uSunEnergy > 0.001 ? terrainShadow(vWorldPos, l) : 0.0;
 
   float canopyAO = mix(0.18, 1.0, smoothstep(0.0, 0.75, vHeight));
 
@@ -75,7 +75,8 @@ void main() {
   vec3 ambient = lightIrradianceSH(n, uSH) * canopyAO;
 
   vec3 sunLight = uSunColor * uSunEnergy * uSunRadiance;
-  vec3 direct = sunLight * ndl * shadow * mix(0.45, 1.0, canopyAO);
+  float moonShadow = skyNight(uSunDir) > 0.001 ? terrainShadow(vWorldPos, -l) : 0.0;
+  vec3 direct = (sunLight * ndl * shadow + skyMoonLight(n, uSunDir) * moonShadow) * mix(0.45, 1.0, canopyAO);
 
   float trans = lightTranslucency(n, v, l, 3.0);
   vec3 sssTint = vec3(0.72, 1.00, 0.34);

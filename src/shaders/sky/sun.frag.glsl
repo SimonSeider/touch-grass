@@ -21,5 +21,6 @@ void main() {
   float a = clamp(disc + glareTight * 0.35 + glareWide * 0.16, 0.0, 1.0) * mix(0.12, 1.0, energy);
   vec3 col = body * mix(1.1, 4.2, energy);
 
+  a *= smoothstep(-0.04, 0.015, uSunDir.y);
   gl_FragColor = vec4(col, a);
 }

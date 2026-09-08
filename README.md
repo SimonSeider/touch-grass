@@ -9,7 +9,7 @@ Because apparently going outside is too much work, so we made a browser-based si
 ## Features
 
 * Procedural grass and terrain
-* Dynamic sky and sun lighting
+* Real-time local day and night cycle with warm twilight, moonlight, stars, mist, fireflies, and nighttime insect ambience
 * Volumetric fog
 * Wind and grass movement
 * Particle effects
@@ -33,6 +33,14 @@ For a production build:
 ```bash
 npm run build
 ```
+
+## Day and night
+
+The world follows your device's local clock at 1:1 speed and resynchronizes immediately after sleep or returning to the tab. Sunrise is at 06:00 and sunset at 18:00, with gradual twilight on either side. These are fixed local times, not seasonal or location-based astronomical sunrise and sunset. No location permission is needed.
+
+Use **Debug → Day & Night → Override Local Time** and the sun elevation slider to preview the atmosphere. Disable the override to return to real time. Audio begins after the first interaction; the recorded nighttime ambience follows the sound-effects and mute controls. Day and night recordings crossfade with the cycle. See [sound credits](src/audio/sounds/CREDITS.md) for the Freesound source, CC0 license, and loop edits.
+
+Run the clock and transition checks with `node --test tests/daynight.test.mjs`.
 
 ## Things you need to know
 

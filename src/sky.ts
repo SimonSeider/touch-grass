@@ -28,6 +28,7 @@ export function createSky(): SkyLayer {
     uniforms: {
       uSunDir: { value: new THREE.Vector3(120, 200, 80).normalize() },
       uHaze: { value: 0.65 },
+      uTime: { value: 0 },
     },
     vertexShader: skyDomeVert,
     fragmentShader: resolveIncludes(skyDomeFrag),
@@ -89,12 +90,14 @@ export function createSky(): SkyLayer {
     },
     update(_dt: number, _t: number, camPos: THREE.Vector3, sunDir: THREE.Vector3) {
       group.position.copy(camPos);
+      domeMat.uniforms.uTime.value = _t;
       domeMat.uniforms.uSunDir.value.copy(sunDir);
       probeGroundMat.uniforms.uSunDir.value.copy(sunDir);
       sunMat.uniforms.uSunDir.value.copy(sunDir);
       tmpDir.copy(sunDir);
       sunMesh.position.copy(tmpDir).multiplyScalar(RADIUS * 0.96);
       sunMesh.lookAt(camPos);
+      sunMesh.visible = sunDir.y > -0.04;
     },
   };
 }
